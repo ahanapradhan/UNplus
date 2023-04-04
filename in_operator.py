@@ -87,6 +87,19 @@ def extract(level,att,new_list):
             print("temp min time:"+str(time.time()-temp_min_start))
             reveal_globals.global_filter_predicates = where_clause.get_filter_predicates()
             print(reveal_globals.global_filter_predicates)
+            fp = reveal_globals.global_filter_predicates
+            new_temp=[]
+    
+            for e2 in fp:
+                include_flag = True
+                for ele in (reveal_globals.global_filter_aeq ):
+                    if ele[1] == e2[1] and e2[2] == '=':
+                        include_flag = False
+                if include_flag:
+                    new_temp.append(e2)
+            
+            reveal_globals.global_filter_predicates = new_temp
+                    
             for item in reveal_globals.global_filter_predicates:
                 if item not in potential_in_attrib:
                     temp=item

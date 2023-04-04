@@ -675,23 +675,26 @@ def in_extractor_start():
     temp_2 =  copy.deepcopy(temp)
     # reveal_globals.global_filter_predicates = reveal_globals.global_filter_aoa
     new_temp=[]
-    for ele in (reveal_globals.global_filter_aeq ):
-        new_temp = []
-        for e2 in temp:
-            if ele[1] == e2[1] and e2[2] == '=':
-                pass
-            else:
-                new_temp.append(e2)
-        temp = new_temp
     
-    for ele in (reveal_globals.global_filter_aoa ):
-        new_temp = []
-        for e2 in temp:
+    for e2 in temp:
+        include_flag = True
+        # new_temp = []
+        for ele in (reveal_globals.global_filter_aeq ):
+            if ele[1] == e2[1] and e2[2] == '=':
+                include_flag = False
+        if include_flag:
+            new_temp.append(e2)
+    
+    temp = new_temp
+    new_temp = []
+    for e2 in temp:
+        include_flag = True
+        for ele in (reveal_globals.global_filter_aoa ):
             if ele[1] == e2[1]:
-                pass
-            else:
-                new_temp.append(e2)
-        temp = new_temp
+                include_flag = False
+        if include_flag:
+            new_temp.append(e2)
+    temp = new_temp
     
     
     reveal_globals.global_filter_predicates = temp 
