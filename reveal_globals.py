@@ -5,7 +5,7 @@ view_min_time=0
 cs_time=0
 
 sf =1
-database_in_use='december'
+database_in_use='tpch100'
 cs_status = ""
 
 query1=""

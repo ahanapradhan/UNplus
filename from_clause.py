@@ -1,4 +1,4 @@
-#whole from clause taken / copied from aman's code of 13 of december
+#whole from clause taken / copied from aman's code of 13 of tpch100
 
 import time
 import sys
@@ -52,7 +52,7 @@ def getCoreRelations(method = 'rname'):
 	if reveal_globals.global_db_engine != 'Microsoft SQL Server':
 		try:
 			cur = reveal_globals.global_conn.cursor()
-			cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and TABLE_CATALOG='december';")
+			cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and TABLE_CATALOG='tpch100';")
 			# cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and TABLE_CATALOG='" + reveal_globals.global_db_instance + "';")
 			res = cur.fetchall()			
 			print(res)
