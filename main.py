@@ -858,8 +858,8 @@ reveal_globals.mini_type = "no-kapil"
 reveal_globals.correlated_sampling="no"
 
 #level-2      
-# reveal_globals.minimizer="copy_based"
-reveal_globals.minimizer="view_based"
+reveal_globals.minimizer="copy_based"
+# reveal_globals.minimizer="view_based"
   
   
 input_q.get_input_query()
