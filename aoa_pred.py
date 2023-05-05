@@ -1,12 +1,9 @@
-import os
-import sys
-import csv
 import copy
 import math
+import sys
 
 sys.path.append('../')
 import reveal_globals
-import psycopg2
 import time
 import executable
 import where_clause
@@ -33,7 +30,7 @@ class Graph:
     def sortUtil(self, n, visited, stack):
         visited[n] = True
         for element in self.graph[n]:
-            if visited[element] == False:
+            if not visited[element]:
                 self.sortUtil(element, visited, stack)
         stack.insert(0, n)
 
@@ -41,10 +38,26 @@ class Graph:
         visited = [False] * self.N
         stack = []
         for element in range(self.N):
-            if visited[element] == False:
+            if not visited[element]:
                 self.sortUtil(element, visited, stack)
         print(stack)
         return stack
+
+
+def execute_sql(sqls):
+    cur = reveal_globals.global_conn.cursor()
+    for sql in sqls:
+        cur.execute(sql)
+    cur.close()
+
+
+def execute_sql_fetchone(sql):
+    cur = reveal_globals.global_conn.cursor()
+    cur.execute(sql)
+    prev = cur.fetchone()
+    prev = prev[0]
+    cur.close()
+    return prev
 
 
 def append_to_list(l, val):
@@ -79,12 +92,11 @@ def extract_aoa():
     reveal_globals.global_proj = reveal_globals.global_filter_predicates
     reveal_globals.global_AoA = 1
     for tab in reveal_globals.global_core_relations:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute('Drop table if exists new_' + tab + ';')
-        cur.execute('Create unlogged table new_' + tab + ' (like ' + tab + '4);')
-        cur.execute('Insert into new_' + tab + ' select * from ' + tab + '4;')
-        cur.execute('alter table new_' + tab + ' add primary key(' + reveal_globals.global_pk_dict[tab] + ');')
-        cur.close()
+        execute_sql(['Drop table if exists new_' + tab + ';',
+                     'Create unlogged table new_' + tab + ' (like ' + tab + '4);',
+                     'Insert into new_' + tab + ' select * from ' + tab + '4;',
+                     'alter table new_' + tab + ' add primary key(' + reveal_globals.global_pk_dict[
+                         tab] + ');'])
     reveal_globals.local_start_time = time.time()  # aman
     filter_predicates = []
     involved_columns = []
@@ -108,7 +120,6 @@ def extract_aoa():
         print("Step 1")
         if pred[2] == '=':
             handle_eq(involved_columns, pred)
-
     print("Step1: ", time.time() - reveal_globals.local_start_time)  # aman
 
     # step2
@@ -116,12 +127,23 @@ def extract_aoa():
     for pred in filter_predicates:  # [table, col, op, cut-off val]
         print("Step 2")
         if pred[2] == '<=':
-            handle_le(involved_columns, pred)
+            handle_op(involved_columns, pred, True)
+            # handle_le(involved_columns, pred)
         elif pred[2] == '>=':
-            handle_ge(involved_columns, pred)
-
+            handle_op(involved_columns, pred, False)
+            # handle_ge(involved_columns, pred)
     print("Step2: ", time.time() - reveal_globals.local_start_time)  # aman
 
+    step3(involved_columns, pred)
+
+    # sneha
+    for tab in reveal_globals.global_core_relations:
+        execute_sql(['Drop table if exists new_' + tab + ';'])
+
+    return
+
+
+def step3(involved_columns, pred):
     # step3
     reveal_globals.local_start_time = time.time()  # aman
     print("Step 3")
@@ -148,36 +170,24 @@ def extract_aoa():
             graph.addEdge(toNum[(pred[3], pred[4])], toNum[(pred[0], pred[1])])
     topo_order = graph.topologicalSort()
     for tab in reveal_globals.global_core_relations:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute('Delete from ' + tab + ';')
-        cur.execute('Insert into ' + tab + ' select * from new_' + tab + ';')
-        cur.close()
+        execute_sql(['Delete from ' + tab + ';',
+                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
     i = 0
     stack = []
     for att in topo_order:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
-        prev = cur.fetchone()
-        prev = prev[0]
-        cur.close()
+        prev = execute_sql_fetchone('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
         if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
             val = int(prev)
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                min_int_val + i) + ';')  # for integer domain
-            cur.close()
+            execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                min_int_val + i) + ';'])
         if 'numeric' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
             val = int(prev)
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                min_int_val + i) + ';')  # for integer domain
-            cur.close()
+            execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                min_int_val + i) + ';'])
         elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
             val = reveal_globals.global_d_plus_value[toAtt[att][1]]
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute("Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                min_date_val + datetime.timedelta(days=i)) + "';")  # for date domain
-            cur.close()
+            execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
+                min_date_val + datetime.timedelta(days=i)) + "';"])
         stack.insert(0, att)
         new_res = executable.getExecOutput()
         if len(new_res) < 2:
@@ -186,97 +196,75 @@ def extract_aoa():
                 right = val
                 while int(right - left) > 0:  # left < right:
                     mid = left + int(math.floor((right - left) / 2))
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                        mid) + ';')  # for integer domain
-                    cur.close()
+                    execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                        mid) + ';'])
                     new_res = executable.getExecOutput()
                     if len(new_res) < 2:
                         left = mid + 1
                     else:
                         right = mid
                     mid = int(math.ceil((left + right) / 2))
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                    right) + ';')  # for integer domain
-                cur.close()
+                execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                    right) + ';'], reveal_globals.global_conn)
             elif 'numeric' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:  # sneha
                 left = min_int_val + i
                 right = val
                 while int(right - left) > 0:  # left < right:
                     mid = left + int(math.floor((right - left) / 2))
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                        mid) + ';')  # for integer domain
-                    cur.close()
+                    execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                        mid) + ';'])
                     new_res = executable.getExecOutput()
                     if len(new_res) < 2:
                         left = mid + 1
                     else:
                         right = mid
                     mid = int(math.ceil((left + right) / 2))
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                    right) + ';')  # for integer domain
-                cur.close()
+                execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                    right) + ';'])
             elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
                 left = min_date_val + datetime.timedelta(days=i)
                 right = val
                 while int((right - left).days) > 0:  # left < right:
-                    # print(left, mid, right)
                     mid = left + datetime.timedelta(days=int(math.floor(((right - left).days) / 2)))
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute("Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                        mid) + "';")  # for date domain
-                    cur.close()
+                    execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
+                        mid) + "';"])
                     new_res = executable.getExecOutput()
                     if len(new_res) < 2:
                         left = mid + datetime.timedelta(days=1)
                     else:
                         right = mid
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute(
-                    "Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(right) + "';")  # for date domain
-                cur.close()
-            chk3 = 0
-            chk4 = 0
+                execute_sql([
+                    "Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(right) + "';"])
+
             isAoA3 = 0
             isAoA4 = 0
             pos_ge = []
             pos_g = []
-            for pred in involved_columns:
-                if pred[1] == pred[1]:
+            for icol in involved_columns:
+                if icol[1] == pred[1]:
                     continue
                 # SQL QUERY for checking value
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute("SELECT " + pred[1] + " FROM new_" + pred[0] + " ;")
-                prev = cur.fetchone()
-                prev = prev[0]
-                cur.close()
-                if 'int' in reveal_globals.global_attrib_types_dict[(pred[0], pred[1])]:
+                prev = execute_sql_fetchone("SELECT " + icol[1] + " FROM new_" + icol[0] + " ;")
+                if 'int' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
                     val = int(prev)  # for INT type
                     if pred[3] == val - 1:
-                        chk2 = 1
-                        pos_g.append(pred)
-                elif 'numeric' in reveal_globals.global_attrib_types_dict[(pred[0], pred[1])]:  # sneha
+                        pos_g.append(icol)
+                elif 'numeric' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:  # sneha
                     val = int(prev)  # for INT type
                     if pred[3] == val - 1:
-                        chk2 = 1
-                        pos_g.append(pred)
-                elif 'date' in reveal_globals.global_attrib_types_dict[(pred[0], pred[1])]:
+                        pos_g.append(icol)
+                elif 'date' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
                     val = reveal_globals.global_d_plus_value[
-                        pred[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
+                        icol[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
                     if pred[3] == val - datetime.timedelta(days=1):
-                        chk2 = 1
-                        pos_g.append(pred)
+                        pos_g.append(icol)
                 if pred[3] == val:
-                    chk3 = 1
-                    pos_ge.append(pred)
+                    pos_ge.append(icol)
 
                 # sneha- below 3 ifs moved to right by one tab
-            if chk3 == 1:
+            if pos_ge:
                 isAoA3 = ainea(1, i, pred[0], pred[1], pos_ge, '>=')
-            if chk4 == 1:
+            if pos_g:
                 isAoA4 = ainea(1, i, pred[0], pred[1], pos_g, '>')
             if isAoA3 == 0 and isAoA4 == 0:
                 if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
@@ -286,32 +274,21 @@ def extract_aoa():
                     append_to_list(reveal_globals.global_filter_aoa,
                                    (toAtt[att][0], toAtt[att][1], '>=', right, max_date_val))
         # i += 1
-
     # reverse topo order
     i = 0
     for tab in reveal_globals.global_core_relations:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute('Delete from ' + tab + ';')
-        cur.execute('Insert into ' + tab + ' select * from new_' + tab + ';')
-        cur.close()
+        execute_sql(['Delete from ' + tab + ';',
+                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
     for att in stack:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
-        prev = cur.fetchone()
-        prev = prev[0]
-        cur.close()
+        prev = execute_sql_fetchone('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
         if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
             val = int(prev)
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                max_int_val - i) + ';')  # for integer domain
-            cur.close()
+            execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                max_int_val - i) + ';'])
         elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
             val = reveal_globals.global_d_plus_value[toAtt[att][1]]
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute("Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                max_date_val - datetime.timedelta(days=i)) + "';")  # for date domain
-            cur.close()
+            execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
+                max_date_val - datetime.timedelta(days=i)) + "';"])
         new_res = executable.getExecOutput()
         if len(new_res) < 2:
             if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
@@ -319,69 +296,53 @@ def extract_aoa():
                 right = max_int_val - i
                 while int((right - left)) > 0:  # left < right:
                     mid = left + int(math.ceil((right - left) / 2))
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute('Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                        mid) + ';')  # for integer domain
-                    cur.close()
+                    execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                        mid) + ';'])
                     new_res = executable.getExecOutput()
                     if len(new_res) < 2:
                         right = mid - 1
                     else:
                         left = mid
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute(
-                    'Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(left) + ';')  # for integer domain
-                cur.close()
+                execute_sql([
+                    'Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(left) + ';'])
             elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
                 left = val
                 right = max_date_val - datetime.timedelta(days=i)
                 while int((right - left).days) > 0:  # left < right:
-                    mid = left + datetime.timedelta(days=int(math.ceil(((right - left).days) / 2)))
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute("Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                        mid) + "';")  # for date domain
-                    cur.close()
+                    mid = left + datetime.timedelta(days=int(math.ceil((right - left).days / 2)))
+                    execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
+                        mid) + "';"])
                     new_res = executable.getExecOutput()
                     if len(new_res) < 2:
                         right = mid - datetime.timedelta(days=1)
                     else:
                         left = mid
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute(
-                    "Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(left) + "';")  # for date domain
-                cur.close()
-            chk1 = 0
-            chk2 = 0
+                execute_sql([
+                    "Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(left) + "';"])
+
             isAoA1 = 0
             isAoA2 = 0
             pos_le = []
             pos_l = []
-            for pred in involved_columns:
-                if pred[1] == pred[1]:
+            for icol in involved_columns:
+                if icol[1] == pred[1]:
                     continue
                 # SQL QUERY for checking value
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute("SELECT " + pred[1] + " FROM new_" + pred[0] + " ;")
-                prev = cur.fetchone()
-                prev = prev[0]
-                cur.close()
-                if 'int' in reveal_globals.global_attrib_types_dict[(pred[0], pred[1])]:
+                prev = execute_sql_fetchone("SELECT " + icol[1] + " FROM new_" + icol[0] + " ;")
+                if 'int' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
                     val = int(prev)  # for INT type
                     if pred[3] == val + 1:
-                        chk2 = 1
-                        pos_l.append(pred)
-                elif 'date' in reveal_globals.global_attrib_types_dict[(pred[0], pred[1])]:
+                        pos_l.append(icol)
+                elif 'date' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
                     val = reveal_globals.global_d_plus_value[
-                        pred[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
+                        icol[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
                     if pred[3] == val + datetime.timedelta(days=1):
-                        chk2 = 1
-                        pos_l.append(pred)
+                        pos_l.append(icol)
                 if pred[3] == val:
-                    chk1 = 1
-                    pos_le.append(pred)
-            if chk1 == 1:
+                    pos_le.append(icol)
+            if pos_le:
                 isAoA1 = ainea(1, i, pred[0], pred[1], pos_le, '<=')
-            if chk2 == 1:
+            if pos_l:
                 isAoA2 = ainea(1, i, pred[0], pred[1], pos_l, '<')
             if isAoA1 == 0 and isAoA2 == 0:
                 if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
@@ -394,21 +355,9 @@ def extract_aoa():
     print("aman_aoa", reveal_globals.global_filter_aoa)
     print("aman_aeq", reveal_globals.global_filter_aeq)
     for tab in reveal_globals.global_core_relations:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute('Delete from ' + tab + ';')
-        cur.execute('Insert into ' + tab + ' select * from new_' + tab + ';')
-        cur.close()
-    # reveal_globals.globalAoA = 0
-    # reveal_globals.global_filter_predicates = where_clause.get_filter_predicates()
+        execute_sql(['Delete from ' + tab + ';',
+                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
     print("Step3: ", time.time() - reveal_globals.local_start_time)  # aman
-
-    # sneha
-    for tab in reveal_globals.global_core_relations:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute('Drop table if exists new_' + tab + ';')
-        cur.close()
-
-    return
 
 
 def handle_eq(cols, pred):
@@ -417,7 +366,7 @@ def handle_eq(cols, pred):
         if c[1] == pred[1]:
             continue
         # SQL QUERY for checking value
-        prev = cursor_exec_query_for_aoa(c)
+        prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
         if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
             val = int(prev)  # for INT type
         elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
@@ -438,8 +387,7 @@ def handle_ge(cols, pred):
             if c[1] == pred[1]:
                 continue
             # SQL QUERY for checking value
-            prev = cursor_exec_query_for_aoa(c)
-            print(reveal_globals.global_attrib_types_dict[(c[0], c[1])])
+            prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
             if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
                 val = int(prev)  # for INT type
                 if type(pred[3]) == type(val):
@@ -472,14 +420,46 @@ def handle_ge(cols, pred):
     return val
 
 
-def cursor_exec_query_for_aoa(c):
-    cur = reveal_globals.global_conn.cursor()
-    cur.execute("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
-    prev = cur.fetchone()
-    prev = prev[0]
-    cur.close()
-    print(prev)
-    return prev
+def datatype_compare(datatype, prev, pred_val, delta, col, c, pos_op, pos_ope):
+    if datatype in ('int', 'numeric'):
+        val = int(prev)
+        val_plus_delta = val + delta
+    elif datatype == 'date':
+        val = reveal_globals.global_d_plus_value[col]
+        val_plus_delta = val + datetime.timedelta(days=delta)
+
+    if type(pred_val) == type(val):
+        if pred_val == val_plus_delta:
+            pos_op.append(c)
+        elif pred_val == val:
+            pos_ope.append(c)
+    return pos_op, pos_ope
+
+
+def populate_pos_based_on_datatype(c, attrib_types_dict, pred, prev, delta, pos_op, pos_ope):
+    if 'int' in attrib_types_dict[(c[0], c[1])]:
+        pos_op, pos_ope = datatype_compare('int', prev, pred[3], delta, c[1], c, pos_op, pos_ope)
+    elif 'date' in attrib_types_dict[(c[0], c[1])]:
+        pos_op, pos_ope = datatype_compare('date', prev, pred[3], delta, c[1], c, pos_op, pos_ope)
+    elif 'numeric' in attrib_types_dict[(c[0], c[1])]:
+        pos_op, pos_ope = datatype_compare('numeric', prev, pred[3], delta, c[1], c, pos_op, pos_ope)
+    return pos_op, pos_ope
+
+
+def handle_op(cols, pred, plus):
+    pos_op, pos_ope = [], []
+    op, ope = ('<', '<=') if plus else ('>', '>=')
+    delta = 1 if plus else -1
+
+    for c in cols:
+        if c[1] != pred[1]:
+            prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
+            pos_op, pos_ope = populate_pos_based_on_datatype(c, reveal_globals.global_attrib_types_dict,
+                                                             pred, prev, delta, pos_op, pos_ope)
+    if pos_op:
+        isAoA = ainea(0, 0, pred[0], pred[1], pos_op, op)
+    if pos_ope:
+        isAoA = ainea(0, 0, pred[0], pred[1], pos_ope, ope)
 
 
 def handle_le(cols, pred):
@@ -490,9 +470,7 @@ def handle_le(cols, pred):
             if c[1] == pred[1]:  # the filter from which this column was derived will not furthur contribute to any
                 continue  # hence, skipping remaining of the extraction
             # SQL QUERY for checking value
-            print(c)
-            prev = cursor_exec_query_for_aoa(c)
-            print(reveal_globals.global_attrib_types_dict[(c[0], c[1])])
+            prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
             if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
                 val = int(prev)  # for INT type
                 if type(pred[3]) == type(val):
@@ -518,11 +496,7 @@ def handle_le(cols, pred):
     except:
         print("nsjsfvkj")
     # snehajsjsd
-    print(val)
-    print(pred[3])
-    print(pos_l, pos_le)
     if pos_le:
-        print("pos_le", pos_le)
         isAoA = ainea(0, 0, pred[0], pred[1], pos_le, '<=')
     if pos_l:
         isAoA = ainea(0, 0, pred[0], pred[1], pos_l, '<')
@@ -530,12 +504,9 @@ def handle_le(cols, pred):
 
 # referenced only in extract_aoa
 def aeqa(tab, col, pos):  # A=A
-    chk = 0
-    cur = reveal_globals.global_conn.cursor()
-    cur.execute("SELECT " + col + " FROM new_" + tab + " ;")
-    prev = cur.fetchone()
-    prev = prev[0]
-    cur.close()
+    chk = False
+    prev = execute_sql_fetchone("SELECT " + col + " FROM new_" + tab + " ;")
+
     if 'int' in reveal_globals.global_attrib_types_dict[(tab, col)]:
         val = int(prev)  # for INT type
     elif 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:
@@ -543,41 +514,29 @@ def aeqa(tab, col, pos):  # A=A
 
     for c in pos:
         # SQL Query for inc c's val
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute("delete from " + c[0] + ";")
-        cur.execute("Insert into " + c[0] + " select * from new_" + c[0] + ";")
-        cur.execute("delete from " + tab + ";")
-        cur.execute("Insert into " + tab + " select * from new_" + tab + ";")
-        cur.close()
+        execute_sql(["delete from " + c[0] + ";",
+                     "Insert into " + c[0] + " select * from new_" + c[0] + ";",
+                     "delete from " + tab + ";",
+                     "Insert into " + tab + " select * from new_" + tab + ";"])
 
         if 'int' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute("update " + tab + " set " + col + " = " + str(val + 1) + " ;")
-            cur.execute("update " + c[0] + " set " + c[1] + " = " + str(val + 1) + " ;")
-            cur.close()
+            execute_sql(["update " + tab + " set " + col + " = " + str(val + 1) + " ;",
+                         "update " + c[0] + " set " + c[1] + " = " + str(val + 1) + " ;"])
         elif 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute("update " + tab + " set " + col + " = '" + str(val + datetime.timedelta(days=1)) + "' ;")
-            cur.execute("update " + c[0] + " set " + c[1] + " = '" + str(val + datetime.timedelta(days=1)) + "' ;")
-            cur.close()
+            execute_sql(
+                ["update " + tab + " set " + col + " = '" + str(val + datetime.timedelta(days=1)) + "' ;",
+                 "update " + c[0] + " set " + c[1] + " = '" + str(val + datetime.timedelta(days=1)) + "' ;"])
         new_result = executable.getExecOutput()
-        # print("aeqa, new_result length: ", len(new_result), tab, col, c[0], c[1])
-        # print("new_result: ", new_result)
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute("update " + tab + " set " + col + " = " + str(val) + " ;")
-        cur.execute("update " + c[0] + " set " + c[1] + " = " + str(val) + " ;")
-        cur.close()
-        # if len(new_result) < 2:
-        #     time.sleep(100)
-        #     new_result = executable.getExecOutput()
+
+        execute_sql(["update " + tab + " set " + col + " = " + str(val) + " ;"
+                        , "update " + c[0] + " set " + c[1] + " = " + str(val) + " ;"])
         if len(new_result) > 1:
-            chk = 1
+            chk = True
             append_to_list(reveal_globals.global_filter_aeq, (tab, col, '=', c[0], c[1]))
             break
-            # return 1
-    if chk == 0:
+    if not chk:
         append_to_list(reveal_globals.global_filter_aeq, (tab, col, '=', val, val))
-    return  # 0
+    return
 
 
 # referenced only on extract_aoa
@@ -585,44 +544,30 @@ def ainea(flag, ofst, tab, col, pos, op):  # AoA, op={<,<=,>,>=}
     # check wether A=A is present in col or pos
     mark = 0
     for c in pos:
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
-        prev = cur.fetchone()
-        prev = prev[0]
-        cur.close()
+        prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
         if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
             val = int(prev)  # for INT type
         elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
             val = reveal_globals.global_d_plus_value[c[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
         # SQL Query for inc c's val
-        cur = reveal_globals.global_conn.cursor()
-        cur.execute("delete from " + c[0] + ";")
-        cur.execute("Insert into " + c[0] + " select * from new_" + c[0] + ";")
-        cur.close()
+        execute_sql(["delete from " + c[0] + ";",
+                     "Insert into " + c[0] + " select * from new_" + c[0] + ";"])
         if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute("update " + c[0] + " set " + c[1] + " = " + str(val + 1) + " ;")
-            cur.close()
+            execute_sql(["update " + c[0] + " set " + c[1] + " = " + str(val + 1) + " ;"])
         elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute("update " + c[0] + " set " + c[1] + " = '" + str(val + datetime.timedelta(days=1)) + "' ;")
-            cur.close()
+            execute_sql(
+                ["update " + c[0] + " set " + c[1] + " = '" + str(val + datetime.timedelta(days=1)) + "' ;"])
         new_result = executable.getExecOutput()
         if len(new_result) > 1:
             new_filter = where_clause.get_filter_predicates()
         else:
-            cur = reveal_globals.global_conn.cursor()
-            cur.execute("delete from " + c[0] + ";")
-            cur.execute("Insert into " + c[0] + " select * from new_" + c[0] + ";")
-            cur.close()
+            execute_sql(["delete from " + c[0] + ";",
+                         "Insert into " + c[0] + " select * from new_" + c[0] + ";"])
             if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute("update " + c[0] + " set " + c[1] + " = " + str(val - 1) + " ;")
-                cur.close()
+                execute_sql(["update " + c[0] + " set " + c[1] + " = " + str(val - 1) + " ;"])
             elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                cur = reveal_globals.global_conn.cursor()
-                cur.execute("update " + c[0] + " set " + c[1] + " = '" + str(val - datetime.timedelta(days=1)) + "' ;")
-                cur.close()
+                execute_sql(
+                    ["update " + c[0] + " set " + c[1] + " = '" + str(val - datetime.timedelta(days=1)) + "' ;"])
             new_filter = where_clause.get_filter_predicates()
         new = ()
         orig = ()
@@ -639,105 +584,69 @@ def ainea(flag, ofst, tab, col, pos, op):  # AoA, op={<,<=,>,>=}
             append_to_list(reveal_globals.global_filter_aoa, (tab, col, op, c[0], c[1]))
             if flag == 1 and (op == '<=' or op == '<'):
                 if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute('Update ' + c[0] + ' set ' + c[1] + ' = ' + str(
-                        max_int_val - ofst - mark) + ';')  # for integer domain
-                    cur.close()
+                    execute_sql(['Update ' + c[0] + ' set ' + c[1] + ' = ' + str(
+                        max_int_val - ofst - mark) + ';'])
                 elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
                     xyz = ofst + mark
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute("Update " + c[0] + " set " + c[1] + " = '" + str(
-                        max_date_val - datetime.timedelta(days=xyz)) + "';")  # for date domain
-                    cur.close()
+                    execute_sql(["Update " + c[0] + " set " + c[1] + " = '" + str(
+                        max_date_val - datetime.timedelta(days=xyz)) + "';"])
                 # run executable
                 new_chk_res = executable.getExecOutput()
                 if len(new_chk_res) < 2:
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute('Update ' + c[0] + ' set ' + c[1] + ' = ' + str(val) + ';')
-                    cur.close()
+                    execute_sql(['Update ' + c[0] + ' set ' + c[1] + ' = ' + str(val) + ';'])
                     if 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:  # for date datatypes
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute(
-                            "Update " + tab + " set " + col + " = '" + str(val - datetime.timedelta(days=1)) + "';")
-                        cur.close()
+                        execute_sql([
+                            "Update " + tab + " set " + col + " = '" + str(val - datetime.timedelta(days=1)) + "';"])
                     else:  # for int datatype
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute('Update ' + tab + ' set ' + col + ' = ' + str(val - 1) + ';')
-                        cur.close()
+                        execute_sql(['Update ' + tab + ' set ' + col + ' = ' + str(val - 1) + ';'])
                 else:
                     if 'int' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute('Update ' + tab + ' set ' + col + ' = ' + str(
-                            max_int_val - ofst - mark - 1) + ';')  # for integer domain
-                        cur.close()
+                        execute_sql(['Update ' + tab + ' set ' + col + ' = ' + str(
+                            max_int_val - ofst - mark - 1) + ';'])
                     elif 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:
                         xyz = ofst + mark + 1
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute("Update " + tab + " set " + col + " = '" + str(
-                            max_date_val - datetime.timedelta(days=xyz)) + "';")  # for date domain
-                        cur.close()
+                        execute_sql(["Update " + tab + " set " + col + " = '" + str(
+                            max_date_val - datetime.timedelta(days=xyz)) + "';"])
                 new_chk_res = executable.getExecOutput()
                 if len(new_chk_res) < 2:
                     if 'int' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute('Update ' + tab + ' set ' + col + ' = ' + str(val - 1) + ';')  # for integer domain
-                        cur.close()
+                        execute_sql(['Update ' + tab + ' set ' + col + ' = ' + str(val - 1) + ';'])
                     elif 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute("Update " + tab + " set " + col + " = '" + str(
-                            val - datetime.timedelta(days=1)) + "';")  # for date domain
-                        cur.close()
+                        execute_sql(["Update " + tab + " set " + col + " = '" + str(
+                            val - datetime.timedelta(days=1)) + "';"])
                 mark += 2
             elif flag == 1 and (op == '>=' or op == '>'):
                 if 'int' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute('Update ' + c[0] + ' set ' + c[1] + ' = ' + str(
-                        min_int_val + ofst + mark) + ';')  # for integer domain
-                    cur.close()
+                    execute_sql(['Update ' + c[0] + ' set ' + c[1] + ' = ' + str(
+                        min_int_val + ofst + mark) + ';'])
                 elif 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:
                     xyz = ofst + mark
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute("Update " + c[0] + " set " + c[1] + " = '" + str(
-                        min_date_val + datetime.timedelta(days=xyz)) + "';")  # for date domain
-                    cur.close()
+                    execute_sql(["Update " + c[0] + " set " + c[1] + " = '" + str(
+                        min_date_val + datetime.timedelta(days=xyz)) + "';"])
                 # run executable
                 new_chk_res = executable.getExecOutput()
                 if len(new_chk_res) < 2:
-                    cur = reveal_globals.global_conn.cursor()
-                    cur.execute('Update ' + c[0] + ' set ' + c[1] + ' = ' + str(val) + ';')
-                    cur.close()
+                    execute_sql(['Update ' + c[0] + ' set ' + c[1] + ' = ' + str(val) + ';'])
                     if 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:  # for date datatypes
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute(
-                            "Update " + tab + " set " + col + " = '" + str(val + datetime.timedelta(days=1)) + "';")
-                        cur.close()
+                        execute_sql([
+                            "Update " + tab + " set " + col + " = '" + str(val + datetime.timedelta(days=1)) + "';"])
                     else:  # for int datatype
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute('Update ' + tab + ' set ' + col + ' = ' + str(val + 1) + ';')
-                        cur.close()
+                        execute_sql(['Update ' + tab + ' set ' + col + ' = ' + str(val + 1) + ';'])
                 else:
                     if 'int' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute('Update ' + tab + ' set ' + col + ' = ' + str(
-                            max_int_val - ofst - mark + 1) + ';')  # for integer domain
-                        cur.close()
+                        execute_sql(['Update ' + tab + ' set ' + col + ' = ' + str(
+                            max_int_val - ofst - mark + 1) + ';'])
                     elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
                         xyz = ofst + mark - 1
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute("Update " + tab + " set " + col + " = '" + str(
-                            max_date_val - datetime.timedelta(days=xyz)) + "';")  # for date domain
-                        cur.close()
+                        execute_sql(["Update " + tab + " set " + col + " = '" + str(
+                            max_date_val - datetime.timedelta(days=xyz)) + "';"])
                 new_chk_res = executable.getExecOutput()
                 if len(new_chk_res) < 2:
                     if 'int' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute('Update ' + tab + ' set ' + col + ' = ' + str(val + 1) + ';')  # for integer domain
-                        cur.close()
+                        execute_sql(['Update ' + tab + ' set ' + col + ' = ' + str(val + 1) + ';'])
                     elif 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:
-                        cur = reveal_globals.global_conn.cursor()
-                        cur.execute("Update " + tab + " set " + col + " = '" + str(
-                            val + datetime.timedelta(days=1)) + "';")  # for date domain
-                        cur.close()
+                        execute_sql(["Update " + tab + " set " + col + " = '" + str(
+                            val + datetime.timedelta(days=1)) + "';"])
                 mark += 2
     if mark != 0:
         return mark

@@ -1,5 +1,6 @@
-import reveal_globals
 import psycopg2
+
+import reveal_globals
 
 
 def getconn():
@@ -11,10 +12,9 @@ def getconn():
 
 def establishConnection():
     print("inside------reveal_support.establishConnection")
-    # reveal_globals.global_connection_string = str('0.0.0.0,5432,' + reveal_globals.global_db_instance + ',,,')
-    # arg = reveal_globals.global_connection_string.split(',')
     reveal_globals.global_db_engine = 'PostgreSQL'
-    conn = getconn()
-    reveal_globals.global_conn = conn
+    reveal_globals.global_conn = getconn()
+    if reveal_globals.global_conn is None:
+        return False
     print("connected...")
     return True
