@@ -2,8 +2,11 @@ import copy
 import math
 import sys
 
+from UNplus.algo_utils import bin_search_update1, get_val_plus_delta, append_to_list
+from UNplus.dbcon import execute_sql, execute_sql_fetchone
+#from UNplus import reveal_globals
+
 sys.path.append('../')
-import reveal_globals
 import time
 import executable
 import where_clause
@@ -44,51 +47,9 @@ class Graph:
         return stack
 
 
-def execute_sql(sqls):
-    cur = reveal_globals.global_conn.cursor()
-    for sql in sqls:
-        cur.execute(sql)
-    cur.close()
-
-
-def execute_sql_fetchone(sql):
-    cur = reveal_globals.global_conn.cursor()
-    cur.execute(sql)
-    prev = cur.fetchone()
-    prev = prev[0]
-    cur.close()
-    return prev
-
-
-def append_to_list(l, val):
-    if isinstance(val[3], datetime.date):
-        modVal = val
-    elif len(val) == 5:
-        table1 = val[0]
-        table2 = val[3]
-        col1 = val[1]
-        col2 = val[4]
-        op = val[2]
-        if op == '>=':  # table1.col1 >= table2.col2
-            modVal = val
-        elif op == "<=":
-            modVal = (table2, col2, ">=", table1, col1)
-        elif op == '>':  # table1.col1 > table2.col2
-            modVal = val
-        elif op == "<":
-            modVal = (table2, col2, ">", table1, col1)
-        elif op == "=":
-            tables = sorted(table1 + "." + col1, table2 + "." + col2)
-            table1 = tables[0].split(".")[0]
-            col1 = tables[0].split(".")[1]
-            table2 = tables[1].split(".")[0]
-            col2 = tables[1].split(".")[1]
-            modVal = (table1, col1, op, table2, col2)
-    if modVal not in l:
-        l.append(modVal)
-
-
 def extract_aoa():
+    from UNplus import reveal_globals
+
     reveal_globals.global_proj = reveal_globals.global_filter_predicates
     reveal_globals.global_AoA = 1
     for tab in reveal_globals.global_core_relations:
@@ -116,23 +77,26 @@ def extract_aoa():
 
     # step1
     # for checking possibility of equality condition between two attributes
-    for pred in filter_predicates:
-        print("Step 1")
-        if pred[2] == '=':
-            handle_eq(involved_columns, pred)
-    print("Step1: ", time.time() - reveal_globals.local_start_time)  # aman
+    # for pred in filter_predicates:
+    # print("Step1: ", time.time() - reveal_globals.local_start_time)  # aman
 
     # step2
     reveal_globals.local_start_time = time.time()  # aman
     for pred in filter_predicates:  # [table, col, op, cut-off val]
         print("Step 2")
+        if pred[2] == '=':
+            handle_eq(involved_columns, pred)
         if pred[2] == '<=':
-            handle_op(involved_columns, pred, True)
-            # handle_le(involved_columns, pred)
+            l, le, pos_l, pos_le = handle_op(involved_columns, pred, True)
+            validate_ainea_predicates(0, 0, l, le, pos_l, pos_le, pred)
         elif pred[2] == '>=':
-            handle_op(involved_columns, pred, False)
-            # handle_ge(involved_columns, pred)
+            g, ge, pos_g, pos_ge = handle_op(involved_columns, pred, False)
+            validate_ainea_predicates(0, 0, g, ge, pos_g, pos_ge, pred)
     print("Step2: ", time.time() - reveal_globals.local_start_time)  # aman
+
+    print(reveal_globals.global_filter_aoa)
+    #    print(reveal_globals.global_filter_aoq)
+    exit(0)
 
     step3(involved_columns, pred)
 
@@ -144,14 +108,141 @@ def extract_aoa():
 
 
 def step3(involved_columns, pred):
+    from UNplus import reveal_globals
+
     # step3
-    reveal_globals.local_start_time = time.time()  # aman
     print("Step 3")
-    attr_list = []
-    for pred in reveal_globals.global_filter_aoa:
-        attr_list.append((pred[0], pred[1]))
-        attr_list.append((pred[3], pred[4]))
-    attr_list = list(set(attr_list))
+
+    reveal_globals.local_start_time = time.time()  # aman
+    attr_list = {(pred[0], pred[1]) for pred in reveal_globals.global_filter_aoa} | {(pred[3], pred[4]) for pred in
+                                                                                     reveal_globals.global_filter_aoa}
+    toNum = {att: i for i, att in enumerate(attr_list)}
+    toAtt = {i: att for att, i in toNum.items()}
+    n = len(attr_list)
+    # n, toAtt, toNum = prepare_input_for_DAGmake(attr_list, n, toAtt, toNum)
+    pred, topo_order = make_DAG(n, pred, toNum)
+    for tab in reveal_globals.global_core_relations:
+        execute_sql(['Delete from ' + tab + ';',
+                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
+    i = 0
+    stack = []
+    for att in topo_order:
+        prev = execute_sql_fetchone('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
+        val = update_attr_for_val(att, i, prev, toAtt, min_int_val, min_date_val)
+        stack.insert(0, att)
+        new_res = executable.getExecOutput()
+        if len(new_res) < 2:
+            left, right = bin_search_update1(att, i, toAtt, val)
+
+            isAoA3, isAoA4 = 0, 0
+            g, ge, pos_g, pos_ge = handle_op(involved_columns, pred, False)
+            if pos_ge:
+                isAoA3 = ainea(1, i, pred[0], pred[1], pos_ge, ge)
+            if pos_g:
+                isAoA4 = ainea(1, i, pred[0], pred[1], pos_g, g)
+            if isAoA3 == 0 and isAoA4 == 0:
+                append_max_val_to_global_filter_aoa(att, right, toAtt)
+    # reverse topo order
+    i = 0
+    for tab in reveal_globals.global_core_relations:
+        execute_sql(['Delete from ' + tab + ';',
+                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
+    for att in stack:
+        prev = execute_sql_fetchone('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
+        val = update_attr_for_val(att, -i, prev, toAtt, max_int_val, max_date_val)
+        new_res = executable.getExecOutput()
+        if len(new_res) < 2:
+            left = val
+            if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+                datatype = 'int'
+                max_boundary = max_int_val
+                right = get_val_plus_delta(datatype, max_boundary, -i)
+                while int((right - left)) > 0:  # left < right:
+                    mid = left + int(math.ceil((right - left) / 2))
+                    execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+                        mid) + ';'])
+                    new_res = executable.getExecOutput()
+                    if len(new_res) < 2:
+                        right = get_val_plus_delta(datatype, mid, -1)
+                    else:
+                        left = mid
+                execute_sql([
+                    'Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(left) + ';'])
+            elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+                datatype = 'date'
+                max_boundary = max_date_val
+                right = get_val_plus_delta(datatype, max_boundary, -i)
+                while int((right - left).days) > 0:  # left < right:
+                    mid = left + datetime.timedelta(days=int(math.ceil((right - left).days / 2)))
+                    execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
+                        mid) + "';"])
+                    new_res = executable.getExecOutput()
+                    if len(new_res) < 2:
+                        right = get_val_plus_delta(datatype, mid, -1)
+                    else:
+                        left = mid
+                execute_sql([
+                    "Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(left) + "';"])
+
+            isAoA1 = 0
+            isAoA2 = 0
+            l, le, pos_l, pos_le = handle_op(involved_columns, pred, True)
+            if pos_le:
+                isAoA1 = ainea(1, i, pred[0], pred[1], pos_le, le)
+            if pos_l:
+                isAoA2 = ainea(1, i, pred[0], pred[1], pos_l, l)
+            if isAoA1 == 0 and isAoA2 == 0:
+                append_min_val_to_global_filter_aoa(att, left, toAtt)
+
+    print("aman_aoa", reveal_globals.global_filter_aoa)
+    print("aman_aeq", reveal_globals.global_filter_aeq)
+    for tab in reveal_globals.global_core_relations:
+        execute_sql(['Delete from ' + tab + ';',
+                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
+    print("Step3: ", time.time() - reveal_globals.local_start_time)  # aman
+
+
+def append_min_val_to_global_filter_aoa(att, left, toAtt):
+    from UNplus import reveal_globals
+
+    if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+        append_to_list(reveal_globals.global_filter_aoa,
+                       (toAtt[att][0], toAtt[att][1], '<=', min_int_val, left))
+    elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+        append_to_list(reveal_globals.global_filter_aoa,
+                       (toAtt[att][0], toAtt[att][1], '<=', min_date_val, left))
+
+
+def append_max_val_to_global_filter_aoa(att, right, toAtt):
+    from UNplus import reveal_globals
+
+    if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+        append_to_list(reveal_globals.global_filter_aoa,
+                       (toAtt[att][0], toAtt[att][1], '>=', right, max_int_val))
+    elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+        append_to_list(reveal_globals.global_filter_aoa,
+                       (toAtt[att][0], toAtt[att][1], '>=', right, max_date_val))
+
+
+def update_attr_for_val(att, i, prev, toAtt, number_boundary, date_boundary):
+    from UNplus import reveal_globals
+
+    if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+        val = int(prev)
+        execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+            get_val_plus_delta('int', number_boundary, i)) + ';'])
+    if 'numeric' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+        val = int(prev)
+        execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
+            get_val_plus_delta('numeric', number_boundary, i)) + ';'])
+    elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
+        val = reveal_globals.global_d_plus_value[toAtt[att][1]]
+        execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
+            get_val_plus_delta('date', date_boundary, i)) + "';"])
+    return val
+
+
+def prepare_input_for_DAGmake(attr_list):
     n = len(attr_list)
     toNum = {}
     toAtt = {}
@@ -161,6 +252,12 @@ def step3(involved_columns, pred):
             toNum[att] = i
             toAtt[i] = att
             i += 1
+    return n, toAtt, toNum
+
+
+def make_DAG(n, pred, toNum):
+    from UNplus import reveal_globals
+
     # make the directed acyclic graph
     graph = Graph(n)
     for pred in reveal_globals.global_filter_aoa:
@@ -169,198 +266,12 @@ def step3(involved_columns, pred):
         else:
             graph.addEdge(toNum[(pred[3], pred[4])], toNum[(pred[0], pred[1])])
     topo_order = graph.topologicalSort()
-    for tab in reveal_globals.global_core_relations:
-        execute_sql(['Delete from ' + tab + ';',
-                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
-    i = 0
-    stack = []
-    for att in topo_order:
-        prev = execute_sql_fetchone('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
-        if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-            val = int(prev)
-            execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                min_int_val + i) + ';'])
-        if 'numeric' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-            val = int(prev)
-            execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                min_int_val + i) + ';'])
-        elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-            val = reveal_globals.global_d_plus_value[toAtt[att][1]]
-            execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                min_date_val + datetime.timedelta(days=i)) + "';"])
-        stack.insert(0, att)
-        new_res = executable.getExecOutput()
-        if len(new_res) < 2:
-            if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                left = min_int_val + i
-                right = val
-                while int(right - left) > 0:  # left < right:
-                    mid = left + int(math.floor((right - left) / 2))
-                    execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                        mid) + ';'])
-                    new_res = executable.getExecOutput()
-                    if len(new_res) < 2:
-                        left = mid + 1
-                    else:
-                        right = mid
-                    mid = int(math.ceil((left + right) / 2))
-                execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                    right) + ';'], reveal_globals.global_conn)
-            elif 'numeric' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:  # sneha
-                left = min_int_val + i
-                right = val
-                while int(right - left) > 0:  # left < right:
-                    mid = left + int(math.floor((right - left) / 2))
-                    execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                        mid) + ';'])
-                    new_res = executable.getExecOutput()
-                    if len(new_res) < 2:
-                        left = mid + 1
-                    else:
-                        right = mid
-                    mid = int(math.ceil((left + right) / 2))
-                execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                    right) + ';'])
-            elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                left = min_date_val + datetime.timedelta(days=i)
-                right = val
-                while int((right - left).days) > 0:  # left < right:
-                    mid = left + datetime.timedelta(days=int(math.floor(((right - left).days) / 2)))
-                    execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                        mid) + "';"])
-                    new_res = executable.getExecOutput()
-                    if len(new_res) < 2:
-                        left = mid + datetime.timedelta(days=1)
-                    else:
-                        right = mid
-                execute_sql([
-                    "Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(right) + "';"])
-
-            isAoA3 = 0
-            isAoA4 = 0
-            pos_ge = []
-            pos_g = []
-            for icol in involved_columns:
-                if icol[1] == pred[1]:
-                    continue
-                # SQL QUERY for checking value
-                prev = execute_sql_fetchone("SELECT " + icol[1] + " FROM new_" + icol[0] + " ;")
-                if 'int' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
-                    val = int(prev)  # for INT type
-                    if pred[3] == val - 1:
-                        pos_g.append(icol)
-                elif 'numeric' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:  # sneha
-                    val = int(prev)  # for INT type
-                    if pred[3] == val - 1:
-                        pos_g.append(icol)
-                elif 'date' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
-                    val = reveal_globals.global_d_plus_value[
-                        icol[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
-                    if pred[3] == val - datetime.timedelta(days=1):
-                        pos_g.append(icol)
-                if pred[3] == val:
-                    pos_ge.append(icol)
-
-                # sneha- below 3 ifs moved to right by one tab
-            if pos_ge:
-                isAoA3 = ainea(1, i, pred[0], pred[1], pos_ge, '>=')
-            if pos_g:
-                isAoA4 = ainea(1, i, pred[0], pred[1], pos_g, '>')
-            if isAoA3 == 0 and isAoA4 == 0:
-                if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                    append_to_list(reveal_globals.global_filter_aoa,
-                                   (toAtt[att][0], toAtt[att][1], '>=', right, max_int_val))
-                elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                    append_to_list(reveal_globals.global_filter_aoa,
-                                   (toAtt[att][0], toAtt[att][1], '>=', right, max_date_val))
-        # i += 1
-    # reverse topo order
-    i = 0
-    for tab in reveal_globals.global_core_relations:
-        execute_sql(['Delete from ' + tab + ';',
-                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
-    for att in stack:
-        prev = execute_sql_fetchone('Select ' + toAtt[att][1] + ' from ' + toAtt[att][0] + ';')
-        if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-            val = int(prev)
-            execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                max_int_val - i) + ';'])
-        elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-            val = reveal_globals.global_d_plus_value[toAtt[att][1]]
-            execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                max_date_val - datetime.timedelta(days=i)) + "';"])
-        new_res = executable.getExecOutput()
-        if len(new_res) < 2:
-            if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                left = val
-                right = max_int_val - i
-                while int((right - left)) > 0:  # left < right:
-                    mid = left + int(math.ceil((right - left) / 2))
-                    execute_sql(['Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(
-                        mid) + ';'])
-                    new_res = executable.getExecOutput()
-                    if len(new_res) < 2:
-                        right = mid - 1
-                    else:
-                        left = mid
-                execute_sql([
-                    'Update ' + toAtt[att][0] + ' set ' + toAtt[att][1] + ' = ' + str(left) + ';'])
-            elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                left = val
-                right = max_date_val - datetime.timedelta(days=i)
-                while int((right - left).days) > 0:  # left < right:
-                    mid = left + datetime.timedelta(days=int(math.ceil((right - left).days / 2)))
-                    execute_sql(["Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(
-                        mid) + "';"])
-                    new_res = executable.getExecOutput()
-                    if len(new_res) < 2:
-                        right = mid - datetime.timedelta(days=1)
-                    else:
-                        left = mid
-                execute_sql([
-                    "Update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(left) + "';"])
-
-            isAoA1 = 0
-            isAoA2 = 0
-            pos_le = []
-            pos_l = []
-            for icol in involved_columns:
-                if icol[1] == pred[1]:
-                    continue
-                # SQL QUERY for checking value
-                prev = execute_sql_fetchone("SELECT " + icol[1] + " FROM new_" + icol[0] + " ;")
-                if 'int' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
-                    val = int(prev)  # for INT type
-                    if pred[3] == val + 1:
-                        pos_l.append(icol)
-                elif 'date' in reveal_globals.global_attrib_types_dict[(icol[0], icol[1])]:
-                    val = reveal_globals.global_d_plus_value[
-                        icol[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
-                    if pred[3] == val + datetime.timedelta(days=1):
-                        pos_l.append(icol)
-                if pred[3] == val:
-                    pos_le.append(icol)
-            if pos_le:
-                isAoA1 = ainea(1, i, pred[0], pred[1], pos_le, '<=')
-            if pos_l:
-                isAoA2 = ainea(1, i, pred[0], pred[1], pos_l, '<')
-            if isAoA1 == 0 and isAoA2 == 0:
-                if 'int' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                    append_to_list(reveal_globals.global_filter_aoa,
-                                   (toAtt[att][0], toAtt[att][1], '<=', min_int_val, left))
-                elif 'date' in reveal_globals.global_attrib_types_dict[(toAtt[att][0], toAtt[att][1])]:
-                    append_to_list(reveal_globals.global_filter_aoa,
-                                   (toAtt[att][0], toAtt[att][1], '<=', min_date_val, left))
-        # i += 1
-    print("aman_aoa", reveal_globals.global_filter_aoa)
-    print("aman_aeq", reveal_globals.global_filter_aeq)
-    for tab in reveal_globals.global_core_relations:
-        execute_sql(['Delete from ' + tab + ';',
-                     'Insert into ' + tab + ' select * from new_' + tab + ';'])
-    print("Step3: ", time.time() - reveal_globals.local_start_time)  # aman
+    return pred, topo_order
 
 
 def handle_eq(cols, pred):
+    from UNplus import reveal_globals
+
     pos_e = []
     for c in cols:
         if c[1] == pred[1]:
@@ -379,48 +290,9 @@ def handle_eq(cols, pred):
         aeqa(pred[0], pred[1], pos_e)
 
 
-def handle_ge(cols, pred):
-    pos_ge = []
-    pos_g = []
-    try:
-        for c in cols:
-            if c[1] == pred[1]:
-                continue
-            # SQL QUERY for checking value
-            prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
-            if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                val = int(prev)  # for INT type
-                if type(pred[3]) == type(val):
-                    if pred[3] == val - 1:
-                        pos_g.append(c)
-                    elif pred[3] == val:
-                        pos_ge.append(c)
-            elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                val = reveal_globals.global_d_plus_value[
-                    c[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
-                if type(pred[3]) == type(val):
-                    if pred[3] == val - datetime.timedelta(days=1):
-                        pos_g.append(c)
-                    elif pred[3] == val:
-                        pos_ge.append(c)
-            elif 'numeric' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                val = int(prev)  # for INT type
-                if type(pred[3]) == type(val):
-                    if int(pred[3]) == val - 1:
-                        pos_g.append(c)
-                    elif int(pred[3]) == val:
-                        pos_ge.append(c)
-    except:
-        print("djvhb")
-    if pos_ge:
-        print("pos_ge", pos_ge)
-        isAoA = ainea(0, 0, pred[0], pred[1], pos_ge, '>=')
-    if pos_g:
-        isAoA = ainea(0, 0, pred[0], pred[1], pos_g, '>')
-    return val
-
-
 def datatype_compare(datatype, prev, pred_val, delta, col, c, pos_op, pos_ope):
+    from UNplus import reveal_globals
+
     if datatype in ('int', 'numeric'):
         val = int(prev)
         val_plus_delta = val + delta
@@ -447,6 +319,8 @@ def populate_pos_based_on_datatype(c, attrib_types_dict, pred, prev, delta, pos_
 
 
 def handle_op(cols, pred, plus):
+    from UNplus import reveal_globals
+
     pos_op, pos_ope = [], []
     op, ope = ('<', '<=') if plus else ('>', '>=')
     delta = 1 if plus else -1
@@ -456,54 +330,20 @@ def handle_op(cols, pred, plus):
             prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
             pos_op, pos_ope = populate_pos_based_on_datatype(c, reveal_globals.global_attrib_types_dict,
                                                              pred, prev, delta, pos_op, pos_ope)
+    return op, ope, pos_op, pos_ope
+
+
+def validate_ainea_predicates(flag, offset, op, ope, pos_op, pos_ope, pred):
     if pos_op:
-        isAoA = ainea(0, 0, pred[0], pred[1], pos_op, op)
+        ainea(flag, offset, pred[0], pred[1], pos_op, op)
     if pos_ope:
-        isAoA = ainea(0, 0, pred[0], pred[1], pos_ope, ope)
-
-
-def handle_le(cols, pred):
-    pos_le = []
-    pos_l = []
-    try:
-        for c in cols:
-            if c[1] == pred[1]:  # the filter from which this column was derived will not furthur contribute to any
-                continue  # hence, skipping remaining of the extraction
-            # SQL QUERY for checking value
-            prev = execute_sql_fetchone("SELECT " + c[1] + " FROM new_" + c[0] + " ;")
-            if 'int' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                val = int(prev)  # for INT type
-                if type(pred[3]) == type(val):
-                    if pred[3] == val + 1:
-                        pos_l.append(c)
-                    elif pred[3] == val:
-                        pos_le.append(c)
-            elif 'numeric' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:  # sneha
-                val = int(prev)  # for INT type
-                if type(pred[3]) == type(val):
-                    if int(pred[3]) == val + 1:
-                        pos_l.append(c)
-                    elif int(pred[3]) == val:
-                        pos_le.append(c)
-            elif 'date' in reveal_globals.global_attrib_types_dict[(c[0], c[1])]:
-                val = reveal_globals.global_d_plus_value[
-                    c[1]]  # datetime.strptime(prev, '%y-%m-%d') #for DATE type
-                if type(pred[3]) == type(val):
-                    if pred[3] == val + datetime.timedelta(days=1):
-                        pos_l.append(c)
-                    elif pred[3] == val:
-                        pos_le.append(c)
-    except:
-        print("nsjsfvkj")
-    # snehajsjsd
-    if pos_le:
-        isAoA = ainea(0, 0, pred[0], pred[1], pos_le, '<=')
-    if pos_l:
-        isAoA = ainea(0, 0, pred[0], pred[1], pos_l, '<')
+        ainea(flag, offset, pred[0], pred[1], pos_ope, ope)
 
 
 # referenced only in extract_aoa
 def aeqa(tab, col, pos):  # A=A
+    from UNplus import reveal_globals
+
     chk = False
     prev = execute_sql_fetchone("SELECT " + col + " FROM new_" + tab + " ;")
 
@@ -541,6 +381,8 @@ def aeqa(tab, col, pos):  # A=A
 
 # referenced only on extract_aoa
 def ainea(flag, ofst, tab, col, pos, op):  # AoA, op={<,<=,>,>=}
+    from UNplus import reveal_globals
+
     # check wether A=A is present in col or pos
     mark = 0
     for c in pos:
@@ -651,3 +493,5 @@ def ainea(flag, ofst, tab, col, pos, op):  # AoA, op={<,<=,>,>=}
     if mark != 0:
         return mark
     return 0
+
+
