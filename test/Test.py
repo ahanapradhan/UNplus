@@ -1,13 +1,6 @@
 import datetime
 
 
-def check_timedelta():
-    now = datetime.date.today()
-    print(now)
-    now = now + datetime.timedelta(days=-3)
-    print(now)
-
-
 def get_tuple_from_predicate(predicate):
     new_list = predicate.split(" ")
     for i in range(len(new_list)):
@@ -27,8 +20,7 @@ for i in range(len(p)):
     except ValueError:
         pass
 
-#print(p)
+print(p)
 
 t = get_tuple_from_predicate("lineitem >= '1995-12-01'")
-#print(t)
-check_timedelta()
+print(t)
