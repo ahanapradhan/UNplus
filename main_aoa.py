@@ -6,8 +6,15 @@
 #    Mar 21, 2020 10:05:19 AM IST  platform: Windows NT
 import datetime
 
-from UNplus import reveal_globals
+# from google.cloud.sql.connector import connector
+# import google.cloud.sql.connector.pg8000 as pg8000
+# import pg8000
+# new reveal.py = reveal.py + reveal_support.py + reveal_proc.py + reveal_proc_support.py
+# import mysql.connector
 
+# newcomment git check
+
+# from turbo_flask import Turbo
 
 '''
 app = Flask(__name__)
@@ -19,7 +26,9 @@ status=0
 '''
 import input_q
 import platform
+import reveal_globals
 import dbcon
+# import outer_join
 import time
 import copy
 import from_clause
@@ -64,9 +73,6 @@ def runreveal(*args):
     print("inside------reveal_support.runreveal")
     '''if reveal_globals.global_test_option == '':
         return'''
-    reveal_support_init()
-    print(reveal_globals.global_conn)
-
     if reveal_globals.global_input_type != "1":
         reveal_globals.global_input_type = "0"
     if reveal_globals.global_conn is None:
@@ -82,7 +88,6 @@ def runreveal(*args):
 def reveal_support_init():
     print("inside------reveal_support.init")
     # INITIALIZE ALL CONCERNED GLOBAL/LOCAL VARIABLES
-    reveal_globals.query1 = input_q.getQuery("bothActiveDormant")
     reveal_globals.output1 = ""
 
     reveal_globals.select_inp = ""
@@ -117,8 +122,7 @@ def reveal_support_init():
     reveal_globals.global_limit_time = ""
     reveal_globals.global_assemble_time = ""
 
-    dbcon.establishConnection()
-    #reveal_globals.global_conn = dbcon.getconn()
+    reveal_globals.global_conn = None
 
     reveal_globals.global_min_button = False
     reveal_globals.global_button_string = ""
@@ -161,16 +165,6 @@ def reveal_support_init():
     reveal_globals.global_restore_flag = False
 
     reveal_globals.global_test_option = False
-    reveal_globals.mini_type = "no-kapil"
-    # reveal_globals.mini_type = "kapil"
-
-    # level-1
-    reveal_globals.correlated_sampling = "yes"
-    # reveal_globals.correlated_sampling="no"
-
-    # level-2
-    # reveal_globals.minimizer="copy_based"
-    reveal_globals.minimizer = "view_based"
 
 
 def extractionStart(*args):
@@ -188,12 +182,6 @@ def remaining_pipeline():
     func_filter_Complete()
     func_aoa_start()
     func_aoa_Complete()
-
-    func_filters_print()
-
-    '''
-    short-circuiting the remaining pipeline
-    
     in_extractor_start()
     in_extractor_complete()
     func_project_start()
@@ -210,7 +198,6 @@ def remaining_pipeline():
     func_nep_Complete()
     func_assemble_start()
     func_assemble_Complete()  # changes made here0
-    '''
     error_handler.restore_database_instance()
 
 
@@ -241,7 +228,7 @@ def func_from_Complete():
 
 def func_min_start():
     min_complete_flag = False
-#    dbcon.establishConnection()
+    dbcon.establishConnection()
     print("inside:   reveal_proc_support.func_min_start")
 
     # INITIALIZATION
@@ -552,11 +539,6 @@ def func_project_start():
         else:
             reveal_globals.global_select_op_proc = reveal_globals.global_select_op_proc + ", " + elt
 
-def func_filters_print():
-    print("global aoa")
-    print(reveal_globals.global_filter_aoa)
-    print("global aoq")
-    print(reveal_globals.global_filter_aeq)
 
 def func_aoa_Complete():
     # ---todo---
@@ -835,7 +817,7 @@ def func_filter_start():
 
 
 def hash_result_comparator():
-    #dbcon.establishConnection()
+    dbcon.establishConnection()
     extracted_query = reveal_globals.output1
     # res= executable.getExecOutput()
     reveal_globals.local_start_time = time.time()
@@ -851,10 +833,21 @@ def hash_result_comparator():
 
 
 where_op_unifier = []
+reveal_support_init()
 dbcon.establishConnection()
 
+reveal_globals.mini_type = "no-kapil"
+# reveal_globals.mini_type = "kapil"
 
-#input_q.get_input_query()
+# level-1
+reveal_globals.correlated_sampling = "yes"
+# reveal_globals.correlated_sampling="no"
+
+# level-2
+# reveal_globals.minimizer="copy_based"
+reveal_globals.minimizer = "view_based"
+
+input_q.get_input_query()
 reveal_vp_start_gui()
 
 x = "Used correlated sampling : " + reveal_globals.correlated_sampling + " and Used " + reveal_globals.minimizer + " minimizer "

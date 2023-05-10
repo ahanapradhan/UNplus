@@ -1,13 +1,9 @@
-import copy
+import executable
+import reveal_globals
 import time
-
+import copy
 import psycopg2
 import psycopg2.extras
-
-import executable
-
-
-# import reveal_globals
 
 
 # import check_nullfree
@@ -36,13 +32,11 @@ def getCoreSizes_cs(core_relations):
 
 
 def correlated_sampling_start():
-    from UNplus import reveal_globals
     itr = 3
     cur = reveal_globals.global_conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     getCoreSizes_cs(reveal_globals.global_all_relations)
 
     for table in reveal_globals.global_core_relations:
-        cur.execute("drop table if exists " + table + "_restore;")
         cur.execute("alter table " + table + " rename to " + table + "_restore;")
     cur.close()
     # restore original tables somewhere
@@ -176,6 +170,3 @@ def correlated_sampling():
         # drop original tables
         # convert views to tables 
         return True
-
-
-from UNplus import reveal_globals
