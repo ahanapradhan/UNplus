@@ -1,34 +1,35 @@
 import os
 
-copy_min_time=0
-view_min_time=0
-cs_time=0
+copy_min_time = 0
+view_min_time = 0
+cs_time = 0
 
-sf =1
-database_in_use='tpch'
+sf = 1
+database_in_use = 'tpch'
 cs_status = ""
 
-query1=""
-output1=""
-#error test
-error=""
+query1 = ""
+output1 = ""
+# error test
+error = ""
 # view_based_minimizer= False
 # copy_based_minimizer= True
 
-minimizer="view_based"
-correlated_sampling="no"
+minimizer = "view_based"
+correlated_sampling = "no"
 mini_type = "kapil"
-#default minimizer: copy-based
+# default minimizer: copy-based
 
 
 global_os_name = "linux"
 global_db_engine_dropdown = ('Microsoft SQL Server', 'PostgreSQL')
-global_db_instance_dropdown = ('tpch1GB', 'tpch10GB', 'tpch100GB', 'tpch1TB', 'tpcds1GB', 'tpcds10GB', 'tpcds100GB', 'tpcds1TB')
+global_db_instance_dropdown = (
+'tpch1GB', 'tpch10GB', 'tpch100GB', 'tpch1TB', 'tpcds1GB', 'tpcds10GB', 'tpcds100GB', 'tpcds1TB')
 global_qh = ""
 global_qe_save_path = ""
 global_qe_save_checkbox = ""
 global_test_option = ''
-db=""
+db = ""
 
 global_db_engine = ""
 global_db_instance = ""
@@ -55,14 +56,14 @@ global_clauses_with_syntactic_changes = ""
 global_number_of_query_invocations = ""
 global_tot_ext_time = ""
 
-copy_min_time=0
-view_min_time=0
-cs_time=0
+copy_min_time = 0
+view_min_time = 0
+cs_time = 0
 global_hashres_time = ""
 global_projection_time = ""
 global_min_time = ""
 global_from_time = ""
-global_aoa_time= ""
+global_aoa_time = ""
 global_where_time = ""
 global_filter_predicates_disj = ""
 global_join_time = ""
@@ -73,7 +74,7 @@ global_groupby_time = ""
 global_orderby_time = ""
 global_agg_time = ""
 global_limit_time = ""
-global_assemble_time=""
+global_assemble_time = ""
 
 global_conn = None
 global_restore_flag = False
@@ -106,7 +107,7 @@ global_index_dict = {}
 global_AoA = 0
 global_proj = []
 
-global_core_sizes ={}
+global_core_sizes = {}
 global_core_relations = []
 global_join_graph = []
 global_filter_predicates = []
@@ -142,4 +143,4 @@ local_start_time = ''
 local_end_time = ''
 
 outer_join_flag = False
-seed_sample_size_per =1
+seed_sample_size_per = 1

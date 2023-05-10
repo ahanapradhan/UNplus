@@ -1,5 +1,28 @@
 import datetime
 
+def check_attr_list():
+    global_filter_aoa = [[1,2,3,4,5], [6,7,8,9,10], [11,12,13,14,15], [16,17,18,19,20]]
+    attr_list = []
+    for pred in global_filter_aoa:
+        attr_list.append((pred[0], pred[1]))
+        attr_list.append((pred[3], pred[4]))
+    attr_list = list(set(attr_list))
+    return attr_list
+
+def check_attr_list1():
+    global_filter_aoa = [[1,2,3,4,5], [6,7,8,9,10], [11,12,13,14,15], [16,17,18,19,20]]
+    attr_list = []
+    for pred in global_filter_aoa:
+        attr_list.extend([(pred[0], pred[1]), (pred[3], pred[4])])
+    attr_list = list(set(attr_list))
+    return attr_list
+
+def check_attr_list2():
+    global_filter_aoa = [[1,2,3,4,5], [6,7,8,9,10], [11,12,13,14,15], [16,17,18,19,20]]
+    attr_list = {(pred[0], pred[1]) for pred in global_filter_aoa} | {(pred[3], pred[4]) for pred in
+                                                                                     global_filter_aoa}
+    return attr_list
+
 
 def check_timedelta():
     now = datetime.date.today()
@@ -27,8 +50,16 @@ for i in range(len(p)):
     except ValueError:
         pass
 
+def mid_cal_for_date():
+    left = datetime.date(1994, 1, 1)
+    right = datetime.date(2000, 1, 1)
+    if abs(right - left) > 0:
+        mid = (left + right + 1) // 2
+    print(mid)
+
 #print(p)
 
 t = get_tuple_from_predicate("lineitem >= '1995-12-01'")
 #print(t)
-check_timedelta()
+#check_timedelta()
+mid_cal_for_date()
