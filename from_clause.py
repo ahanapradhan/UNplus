@@ -2,6 +2,9 @@
 
 import time
 import sys
+
+from UNplus import dbcon
+
 try:
 	import psycopg2
 except ImportError:
@@ -12,49 +15,15 @@ sys.path.append('../')
 import reveal_globals
 import executable
 
-
-def getconn() :
-    #change port 
-    conn = psycopg2.connect(
-   database=reveal_globals.database_in_use, user='postgres', password='root', host='localhost', port= '5432'
-)
-    return conn
-
-def establishConnection():
-    print("inside------reveal_support.establishConnection")
-    reveal_globals.global_db_engine = 'PostgreSQL'
-    conn=getconn()
-    reveal_globals.global_conn = conn
-    print("connected...")
-    return True
-   
-# def check_lenRes():
-# 	cur=reveal_globals.global_conn.cursor()
-# 	query=reveal_globals.query1
-# 	reveal_globals.global_no_execCall = reveal_globals.global_no_execCall + 1
-# 	cur.execute(query)
-# 	res = cur.fetchall() #fetchone always return a tuple whereas fetchall return list
-# 	#print(res)
-# 	colnames = [desc[0] for desc in cur.description] 
-# 	cur.close()
-# 	# result.append(tuple(colnames))
-# 	if res is not None:
-# 		if len(res)>0:
-# 			return True
-# 		else:
-# 			return False
-# 	return False
-
-
-
-def getCoreRelations(method = 'rname'):
+def getCoreRelations2(method = 'rname'):
 	#GET ALL TABLE NAMES IN THE DATABASE INSTANCE
 	if reveal_globals.global_db_engine != 'Microsoft SQL Server':
 		try:
 			cur = reveal_globals.global_conn.cursor()
-			cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and TABLE_CATALOG='tpch100';")
+			cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and TABLE_CATALOG= '"+reveal_globals.database_in_use+"';")
 			# cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' and TABLE_CATALOG='" + reveal_globals.global_db_instance + "';")
-			res = cur.fetchall()			
+			res = cur.fetchall()
+			cur.execute("SET search_path = 'public';")
 			print(res)
 			print("from - line 23") #aman
 			cur.close()
@@ -125,9 +94,9 @@ def getCoreRelations(method = 'rname'):
 			cur.execute('drop table temp;')
 			cur.close()
 		for tabname in reveal_globals.global_all_relations:
-			establishConnection()
+			dbcon.establishConnection()
 			cur = reveal_globals.global_conn.cursor()
-			cur.execute("set statement_timeout to '2s'")
+			cur.execute("set statement_timeout to '5s'")
 			cur.close()
 			try:
 				cur = reveal_globals.global_conn.cursor()
@@ -155,7 +124,7 @@ def getCoreRelations(method = 'rname'):
 				cur.close()
 			except Exception as error:
 				print("Error Occurred in table extraction. Error: " + str(error))
-				# exit(1)
+				#exit(1)
 
 
 		# cur = reveal_globals.global_conn.cursor()
@@ -169,3 +138,16 @@ def getCoreRelations(method = 'rname'):
 
 
 #for outer join explain the importance of second from clause extraction method
+
+def getCoreRelations1(method = 'dummy'):
+	core_relations = ['orders', 'lineitem']
+	print(core_relations)
+	return sorted(core_relations)
+
+
+def getCoreRelations(env):
+	if env == "test":
+		return getCoreRelations1()
+	else:
+		return getCoreRelations2()
+
