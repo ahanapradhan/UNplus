@@ -5,7 +5,7 @@ view_min_time=0
 cs_time=0
 
 sf =1
-database_in_use='tpch'
+database_in_use='tpch100'
 cs_status = ""
 
 query1=""
@@ -91,7 +91,7 @@ global_db_prev_screen = ""
 global_no_execCall = 0
 
 # global_support_files_path = "/services/app/support_files/"
-global_reduced_data_path = "/Users/ahanapradhan/Desktop/Projects/UNMASQUE/reduced_data/"
+global_reduced_data_path = "C:/Users/Sneha/Documents/universal_unmasque_folder/unmasque_web_t/UNPlus_NullFree/reduced_data/"
 global_output_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "./output/")
 global_input_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "./input/")
 
