@@ -13,17 +13,8 @@ import datetime
 # import mysql.connector
 
 # newcomment git check
-import psycopg2
-from pickle import TRUE
-from flask import *
-import csv
-import sys
-import threading
 
-import time
-from flask import Flask, render_template, abort
 # from turbo_flask import Turbo
-import random
 
 '''
 app = Flask(__name__)
@@ -34,7 +25,6 @@ app.secret_key="dsl@iisc"
 status=0
 '''
 import input_q
-import error_handler
 import platform
 import reveal_globals
 import dbcon
@@ -53,26 +43,20 @@ import aggregation
 import orderby_clause
 import limit
 import result_comparator
-import executable
-import correlated_samp
 import view_minimizer
 import copy_min
 import nep
 import aoa_pred
 import cs2_impr
 
-import psycopg2
-
-import os.path
-
 
 def extracted_part_info():
     print("inside:   reveal_proc_support.extracted_part_info")
-    return {'SELECT': reveal_globals.global_select_op_proc.strip(), \
-            'FROM': reveal_globals.global_from_op.strip(), \
-            'WHERE': reveal_globals.global_where_op.strip(), \
-            'GROUP BY': reveal_globals.global_groupby_op.strip(), \
-            'ORDER BY': reveal_globals.global_orderby_op.strip(), \
+    return {'SELECT': reveal_globals.global_select_op_proc.strip(),
+            'FROM': reveal_globals.global_from_op.strip(),
+            'WHERE': reveal_globals.global_where_op.strip(),
+            'GROUP BY': reveal_globals.global_groupby_op.strip(),
+            'ORDER BY': reveal_globals.global_orderby_op.strip(),
             'LIMIT': reveal_globals.global_limit_op.strip()}
 
 
@@ -83,7 +67,6 @@ def reveal_vp_start_gui():
     else:
         reveal_globals.global_os_name = 'linux'
     runreveal()
-    # reveal_support_init()
 
 
 def runreveal(*args):
@@ -279,7 +262,6 @@ def func_min_start():
                 # func_min_Complete()
             else:
                 reveal_globals.global_test_option = False
-
     return min_complete_flag
 
 
@@ -291,9 +273,6 @@ def func_min_Complete():
     print("Minimization time ", reveal_globals.global_min_time)
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
     reveal_globals.global_extracted_info_dict['join'] = extracted_part_info()
-    # func_join_start()
-    # func_join_Complete()
-    # remaining_pipeline()
 
 
 def func_join_Complete():
@@ -303,7 +282,6 @@ def func_join_Complete():
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
     print("inside:   reveal_proc_support.func_join_Complete")
     reveal_globals.global_extracted_info_dict['filter'] = extracted_part_info()
-    # update_load()
 
 
 def func_join_start():
@@ -344,13 +322,11 @@ def func_assemble_start():
     if reveal_globals.global_limit_op != '':
         output = output + "\n" + "Limit " + reveal_globals.global_limit_op
     output = output + ";"
-    # output = "Select " + reveal_globals.global_select_op + "\n" + "From "  + reveal_globals.global_from_op + "\n" + "Where " + reveal_globals.global_where_op + "\n" + "Group By "+ reveal_globals.global_groupby_op + "\n" + "Order By " + reveal_globals.global_orderby_op + "\n" + "Limit " + reveal_globals.global_limit_op + ";"
     print('EXTRACTED OUTPUT QUERY :')
     reveal_globals.output1 = output
     print(reveal_globals.output1)
 
 
-#### start----  additions for nep
 def extractedQ():
     query = "Select " + reveal_globals.global_select_op_proc + "\n" + "From " + reveal_globals.global_from_op
     if reveal_globals.global_where_op.strip() != '':
@@ -386,17 +362,12 @@ def func_nep_Complete():
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
 
 
-##### end --- additions for nep
-
 def func_limit_Complete():
     print("inside:   reveal_proc_support.func_limit_Complete")
     reveal_globals.local_end_time = time.time()
     reveal_globals.global_limit_time = str(
         round(reveal_globals.local_end_time - reveal_globals.local_start_time, 1)) + "      sec"
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
-    # func_assemble_start()
-
-    # update_load()
 
 
 def func_limit_start():
@@ -404,8 +375,6 @@ def func_limit_start():
 
     temp = reveal_globals.global_filter_predicates
     temp_2 = copy.deepcopy(temp)
-    # reveal_globals.global_filter_predicates = reveal_globals.global_filter_aoa
-    new_temp = []
     for ele in reveal_globals.global_filter_aeq:
         new_temp = []
         for e2 in temp:
@@ -456,7 +425,6 @@ def func_agg_Complete():
         round(reveal_globals.local_end_time - reveal_globals.local_start_time, 1)) + "      sec"
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
     reveal_globals.global_extracted_info_dict['order by'] = extracted_part_info()
-    # update_load()
 
 
 def func_agg_start():
@@ -487,7 +455,7 @@ def refine_Query():
             if elt[0] == attrib and (not ('sum' in elt[1] or 'count' in elt[1])):
                 remove_flag = False
                 break
-        if remove_flag == True:
+        if remove_flag:
             try:
                 reveal_globals.global_groupby_attributes.remove(attrib)
             except:
@@ -497,7 +465,7 @@ def refine_Query():
     reveal_globals.global_groupby_op = ''
     for i in range(len(reveal_globals.global_groupby_attributes)):
         elt = reveal_globals.global_groupby_attributes[i]
-        if first_occur == True:
+        if first_occur:
             reveal_globals.global_groupby_op = elt
             first_occur = False
         else:
@@ -514,7 +482,7 @@ def refine_Query():
         if elt != reveal_globals.global_projection_names[i] and reveal_globals.global_projection_names[i] != '':
             elt = elt + ' as ' + reveal_globals.global_projection_names[i]
             reveal_globals.global_output_list[-1] = copy.deepcopy(reveal_globals.global_projection_names[i])
-        if first_occur == True:
+        if first_occur:
             reveal_globals.global_select_op = elt
             first_occur = False
         else:
@@ -529,18 +497,16 @@ def func_groupby_Complete():
         round(reveal_globals.local_end_time - reveal_globals.local_start_time, 1)) + "      sec"
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
     reveal_globals.global_extracted_info_dict['agg'] = extracted_part_info()
-    # update_load()
 
 
 def func_groupby_start():
     print("inside:   reveal_proc_support.func_groupby_start")
     reveal_globals.local_start_time = time.time()
     first_occur = True
-    # reveal_globals.global_groupby_attributes, reveal_globals.global_groupby_flag = groupby_clause.getGroupByAttributes()
     groupby_clause.getGroupByAttributes_disj()
     for i in range(len(reveal_globals.global_groupby_attributes)):
         elt = reveal_globals.global_groupby_attributes[i]
-        if first_occur == True:
+        if first_occur:
             reveal_globals.global_groupby_op = elt
             first_occur = False
         else:
@@ -554,7 +520,6 @@ def func_project_Complete():
         round(reveal_globals.local_end_time - reveal_globals.local_start_time, 1)) + "      sec"
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
     reveal_globals.global_extracted_info_dict['group by'] = extracted_part_info()
-    # update_load()
 
 
 def func_project_start():
@@ -568,23 +533,20 @@ def func_project_start():
         if elt != reveal_globals.global_projection_names[i] and reveal_globals.global_projection_names[i] != '':
             elt = elt + ' as ' + reveal_globals.global_projection_names[i]
             reveal_globals.global_output_list[-1] = copy.deepcopy(reveal_globals.global_projection_names[i])
-        if first_occur == True:
+        if first_occur:
             reveal_globals.global_select_op_proc = elt
             first_occur = False
         else:
             reveal_globals.global_select_op_proc = reveal_globals.global_select_op_proc + ", " + elt
 
 
-################## start-- additions for aoa_pred
 def func_aoa_Complete():
     # ---todo---
     reveal_globals.local_end_time = time.time()
     reveal_globals.global_aoa_time = str(
         round(reveal_globals.local_end_time - reveal_globals.local_start_time, 1)) + "      sec"
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
-    # reveal_globals.global_extracted_info_dict['projection'] = extracted_part_info()
 
-    # func_project_start()
     jg = []
     for elt in reveal_globals.global_filter_aeq:
         temp = []
@@ -600,7 +562,6 @@ def func_aoa_Complete():
 
 def func_aoa_start():
     reveal_globals.local_start_time = time.time()  # aman
-    # reveal_globals.global_filter_predicates = aoa_pred.extract_aoa() #referenced aoa_pred.extract_aoa
     aoa_pred.extract_aoa()
 
     for elt in (reveal_globals.global_filter_aoa + reveal_globals.global_filter_aeq):
@@ -619,18 +580,12 @@ def func_aoa_start():
 
         update_where_op_with_predicate(predicate)
 
-    # print("AoA pred time: ", time.time() - reveal_globals.local_start_time) #aman
-    # print(reveal_globals.global_filter_aoa)
-
-
-################## end-- additions for aoa_pred
 
 def in_extractor_start():
     reveal_globals.local_start_time = time.time()
 
     temp = reveal_globals.global_filter_predicates
     temp_2 = copy.deepcopy(temp)
-    # reveal_globals.global_filter_predicates = reveal_globals.global_filter_aoa
     new_temp = []
     for ele in reveal_globals.global_filter_aeq:
         new_temp = []
@@ -643,9 +598,7 @@ def in_extractor_start():
 
     reveal_globals.global_filter_predicates = temp
     reveal_globals.local_start_time = time.time()
-
     in_operator.in_extract()
-
     reveal_globals.global_filter_predicates = temp_2
 
 
@@ -654,7 +607,6 @@ def in_extractor_complete():
 
     temp = reveal_globals.global_filter_predicates
     # temp_2 =  copy.deepcopy(temp)
-    # reveal_globals.global_filter_predicates = reveal_globals.global_filter_aoa
     new_temp = []
     for ele in temp:
         if ele[1] in reveal_globals.global_key_attributes:
@@ -851,8 +803,6 @@ def func_filter_Complete():
         round(reveal_globals.local_end_time - reveal_globals.local_start_time, 1)) + "      sec"
     reveal_globals.global_tot_ext_time += reveal_globals.local_end_time - reveal_globals.local_start_time
     reveal_globals.global_extracted_info_dict['projection'] = extracted_part_info()
-    # update_load()
-    # func_project_start()
 
 
 def func_filter_start():
@@ -880,188 +830,7 @@ def hash_result_comparator():
         print(" results Same")
     else:
         print("results different")
-    #     return render_template('page2.html',output_query=session["o_query"],input_query=session["i_query"],res_comp="Comparison Successful!!\n \n Output tables of Extracted Query and Hidden Query are Same.")
-    # else:
-    #     return render_template('page2.html',output_query=session["o_query"],input_query=session["i_query"],res_comp="Comparison Unsuccessful!!\n \n Output tables of Extracted Query and Hidden Query are Different.")
 
-
-'''
-if __name__ == '__main__':
-    reveal_vp_start_gui()
- 
- '''
-
-'''
-@app.route("/")
-def session_page():
-    reveal_support_init()
-    dbcon.establishConnection()
-    return render_template('page1.html')
-
-@app.route("/query_input_page",methods=['POST','GET'])
-def query_input_page():
-    # if(request.method=="POST"):
-    #     # session["name"]=n     #session is stored in form of doctionary
-    #     session["i_query"]=[]
-    #     session["o_query"]=[]
-    # else:
-    #     pass
-    #     # n=request.form.get("uname")
-    reveal_support_init()
-    dbcon.establishConnection()
-    return render_template('page1.html',er=reveal_globals.error,q=reveal_globals.query1)
-
-
-
-    
-@app.route("/query_process_page",methods=['POST','GET'])
-def query_process_page():
-    # try:
-    if request.method=="POST":
-        reveal_globals.error=""
-        reveal_globals.query1=""
-        q=request.form.get("QUERY")
-        reveal_globals.minimizer=request.form.get("minimizer")
-        # print("minimizer====",reveal_globals.minimizer)
-        reveal_globals.correlated_sampling=request.form.get("correlated_sampling")
-        
-        reveal_globals.query1=q
-        print("point-1")
-        reveal_vp_start_gui()
-        print("point-2")
-        op=reveal_globals.output1
-        session["i_query"]=reveal_globals.query1
-        session["o_query"]=op
-        print("Error:  ",reveal_globals.error)
-        if(reveal_globals.error==""):
-            return redirect('/query_output_page')
-        else:
-            return redirect('/query_input_page')
-    # except:
-    #     return render_template('error.html',er=reveal_globals.error)
-
-
-
-
-
-
-
-# OLd query_process_page()
-# @app.route("/query_process_page",methods=['POST','GET'])
-# def query_process_page():
-#     if request.method=="POST":
-#         q=request.form.get("QUERY")
-#         reveal_globals.query1=q
-#         reveal_vp_start_gui()
-#         op=reveal_globals.output1
-#         session["i_query"]=reveal_globals.query1
-#         session["o_query"]=op
-#         update_load()
-#         # return render_template('page2.html',output_query=session["o_query"],input_query=session["i_query"])
-#         return redirect('/query_output_page')
-#     else:
-#         return redirect("/query_input_page")
-
-
-
-
-@app.route("/query_output_page")
-def query_output_page():
- 
-    x="Used correlated sampling : "+reveal_globals.correlated_sampling+ " and Used "+reveal_globals.minimizer+" minimizer " 
-    return render_template('page2.html',output_query=session["o_query"],input_query=session["i_query"], min_combination=x)
-    # return render_template('page2.html',output_query=op,input_query=ip)
-
-
-@app.route("/back_to_query_page")
-def back_to_query_page():
-    error_handler.restore_database_instance
-    reveal_support_init()
-    return redirect("/query_input_page")
-
-
-# @app.route("/set_view_based_minimizer")
-# def set_view_based_minimizer():
-#     print(" inside set_view_based_minimizer")
-#     reveal_globals.view_based_minimizer=True
-#     reveal_globals.correlated_sampling=False
-#     reveal_globals.copy_based_minimizer= False
-#     return render_template('page1.html',min_option="Note: Using View Based Minimizer")
-
-
-# @app.route("/set_copy_based_minimizer")
-# def set_copy_based_minimizer():
-#     print("set_copy_based_minimizer")
-#     reveal_globals.view_based_minimizer=False
-#     reveal_globals.correlated_sampling=False
-#     reveal_globals.copy_based_minimizer= True
-#     return render_template('page1.html',min_option="Note: Using Copy Based Minimizer")
-
-# #CORRELATED SAMPLING
-# @app.route("/set_correlated_sampling")
-# def set_correlated_sampling():
-#     print("set_correlated_sampling")
-#     reveal_globals.correlated_sampling=True
-#     reveal_globals.view_based_minimizer=True
-#     reveal_globals.copy_based_minimizer= False
-#     return render_template('page1.html',min_option="Note: Using Correlated Sampling")
-
-
-
-
-@app.route("/hash_result_comparator")
-def hash_result_comparator():
-    dbcon.establishConnection()
-    extracted_query=reveal_globals.output1
-    res= executable.getExecOutput()
-    #call hash based result comparator
-    a=result_comparator.match(extracted_query,res)
-    error_handler.restore_database_instance()
-    if(a):
-        return render_template('page2.html',output_query=session["o_query"],input_query=session["i_query"],res_comp="Comparison Successful!!\n \n Output tables of Extracted Query and Hidden Query are Same.")
-    else:
-        return render_template('page2.html',output_query=session["o_query"],input_query=session["i_query"],res_comp="Comparison Unsuccessful!!\n \n Output tables of Extracted Query and Hidden Query are Different.")
-
-
-
-
-
-
-
-# def update_load():
-#     with app.app_context():
-#         turbo.push(turbo.replace(render_template('loadavg.html'), 'load'))
-
-
-@app.context_processor
-def inject_load():
-    return {
-    'from_time':reveal_globals.global_from_time,
-    'minimization_time': reveal_globals.global_min_time,
-    'select_time':reveal_globals.global_select_time,
-    'where_time':reveal_globals.global_where_time,
-    'join_time':reveal_globals.global_join_time,
-    'filter_time':reveal_globals.global_filter_time,
-    'groupby_time':reveal_globals.global_groupby_time, 
-    'orderby_time':reveal_globals.global_orderby_time,
-    'agg_time':reveal_globals.global_agg_time,
-    'limit_time':reveal_globals.global_limit_time,
-    'assemble_time':reveal_globals.global_assemble_time,
-    'from_op':reveal_globals.global_from_op,
-    'select_op':reveal_globals.global_select_op,
-    'where_op':reveal_globals.global_where_op,
-    'groupby_op':reveal_globals.global_groupby_op,
-    'orderby_op':reveal_globals.global_orderby_op,
-    'limit_op':reveal_globals.global_limit_op,
-    }
-
-
-if __name__=='__main__':
-    # app.run(host='0.0.0.0', port=8090, debug=True)
-    app.run(host='127.0.0.1', port=8083)
-    #change while web deloyment
-
-'''
 
 where_op_unifier = []
 reveal_support_init()
@@ -1070,7 +839,6 @@ dbcon.establishConnection()
 reveal_globals.mini_type = "no-kapil"
 # reveal_globals.mini_type = "kapil"
 
-# print("minimizer====",reveal_globals.minimizer)
 # level-1
 reveal_globals.correlated_sampling = "yes"
 # reveal_globals.correlated_sampling="no"
@@ -1082,15 +850,8 @@ reveal_globals.minimizer = "view_based"
 input_q.get_input_query()
 reveal_vp_start_gui()
 
-# op=reveal_globals.output1
-# print(op)
-# print("Error:  ", reveal_globals.error)
 x = "Used correlated sampling : " + reveal_globals.correlated_sampling + " and Used " + reveal_globals.minimizer + " minimizer "
 print(x)
-
-# error_handler.restore_database_instance()
-# reveal_support_init()
-# hash_result_comparator()
 
 print("From Clause Time          : ", reveal_globals.global_from_time)
 print("total DB Minimizer Time   : ", reveal_globals.global_min_time)
@@ -1108,7 +869,7 @@ print("Group By                  : ", reveal_globals.global_groupby_time)
 print("Aggregate Time            : ", reveal_globals.global_agg_time)
 print("Order By                  : ", reveal_globals.global_orderby_time)
 print("Limit                     : ", reveal_globals.global_limit_time)
-# print("NEP time                  : ", reveal_globals.global_nep_time)
+print("NEP time                  : ", reveal_globals.global_nep_time)
 print("total extraction time     : ", reveal_globals.global_tot_ext_time)
 
 # hash_result_comparator()
