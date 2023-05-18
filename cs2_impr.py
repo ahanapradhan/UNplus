@@ -35,8 +35,7 @@ def getCoreSizes_cs(core_relations):
     }
 
 
-def correlated_sampling_start():
-    from UNplus import reveal_globals
+def correlated_sampling_start(reveal_globals):
     itr = 3
     cur = reveal_globals.global_conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     getCoreSizes_cs(reveal_globals.global_all_relations)
@@ -50,7 +49,8 @@ def correlated_sampling_start():
 
     reveal_globals.seed_sample_size_per = 0.16 / reveal_globals.sf
     while itr > 0:
-        if not correlated_sampling():
+        done, reveal_globals = correlated_sampling(reveal_globals)
+        if not done:
             print('sampling failed in iteraation', itr)
             reveal_globals.seed_sample_size_per *= 10
             itr = itr - 1
@@ -58,7 +58,7 @@ def correlated_sampling_start():
             reveal_globals.cs_time = time.time() - start_time
             print("CS PASSED")
             reveal_globals.cs_status = "PASS"
-            return
+            return reveal_globals
 
     print("correlated samplin failed totally starting with halving based minimization")
     reveal_globals.cs_status = "FAIL"
@@ -70,10 +70,10 @@ def correlated_sampling_start():
     cur.close()
     # cs sampling time
     reveal_globals.cs_time = time.time() - start_time
-    return
+    return reveal_globals
 
 
-def correlated_sampling():
+def correlated_sampling(reveal_globals):
     print(reveal_globals.global_key_lists)
     print("Starting correlated sampling ")
 
@@ -171,11 +171,11 @@ def correlated_sampling():
         for table in reveal_globals.global_core_relations:
             cur.execute("drop table if exists " + table + ";")
         cur.close()
-        return False
+        return False, reveal_globals
     else:
         # drop original tables
         # convert views to tables 
-        return True
+        return True, reveal_globals
 
 
 from UNplus import reveal_globals

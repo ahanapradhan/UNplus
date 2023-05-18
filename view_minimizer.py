@@ -7,7 +7,7 @@ import time
 import pandas as pd
 
 
-def getCoreSizes(core_relations):
+def getCoreSizes(reveal_globals, core_relations):
     core_sizes = {}
     for tabname in core_relations:
         try:
@@ -21,16 +21,17 @@ def getCoreSizes(core_relations):
     return core_sizes
 
 
-def reduce_Database_Instance(core_relations, method='binary partition', max_no_of_rows=1, executable_path=""):
+def reduce_Database_Instance(reveal_globals):
     if reveal_globals.cs_status == "PASS":
-        return reduce_Database_Instance_cs_pass(reveal_globals.global_core_relations)
+        return reduce_Database_Instance_cs_pass(reveal_globals), reveal_globals
     else:
-        return reduce_Database_Instance_cs_fail(reveal_globals.global_core_relations)
+        return reduce_Database_Instance_cs_fail(reveal_globals), reveal_globals
 
 
-def reduce_Database_Instance_cs_pass(core_relations, method='binary partition', max_no_of_rows=1, executable_path=""):
+def reduce_Database_Instance_cs_pass(reveal_globals, method='binary partition', max_no_of_rows=1, executable_path=""):
     reveal_globals.local_other_info_dict = {}
-    core_sizes = getCoreSizes(core_relations)
+    core_relations = reveal_globals.global_core_relations
+    core_sizes = getCoreSizes(reveal_globals, core_relations)
     start_time = time.time()
     # print("YES1")
     '''
@@ -225,7 +226,7 @@ def reduce_Database_Instance_cs_pass(core_relations, method='binary partition', 
         new_result = executable.getExecOutput()
         if len(new_result) <= 1:
             print("Error: Query out of extractable domain\n")
-            return False
+            return False, reveal_globals
 
     # UN+nf
     # if check_nullfree.getExecOutput() == False:
@@ -254,7 +255,7 @@ def reduce_Database_Instance_cs_pass(core_relations, method='binary partition', 
     new_result = executable.getExecOutput()
     if len(new_result) <= 1:
         print("Error: Query out of extractable domain\n")
-        return False
+        return False, reveal_globals
     # if check_nullfree.getExecOutput() == False:
     # 	print("Error: Query out of extractable domain\n")
     # 	return False
@@ -275,7 +276,7 @@ def reduce_Database_Instance_cs_pass(core_relations, method='binary partition', 
     reveal_globals.global_result_dict['min'] = copy.deepcopy(new_result)
     reveal_globals.local_other_info_dict['Result Cardinality'] = str(len(new_result) - 1)
     reveal_globals.global_other_info_dict['min'] = copy.deepcopy(reveal_globals.local_other_info_dict)
-    return True
+    return True, reveal_globals
 
 
 def reduce_Database_Instance_cs_fail(core_relations, method='binary partition', max_no_of_rows=1, executable_path=""):

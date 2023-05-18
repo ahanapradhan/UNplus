@@ -11,14 +11,14 @@ def getconn():
     return conn
 
 
-def establishConnection():
+def establishConnection(reveal_globals):
     print("inside------reveal_support.establishConnection")
     reveal_globals.global_db_engine = 'PostgreSQL'
     reveal_globals.global_conn = getconn()
     if reveal_globals.global_conn is None:
-        return False
+        return False, reveal_globals
     print("connected...")
-    return True
+    return True, reveal_globals
 
 
 def execute_sql(sqls):

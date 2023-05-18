@@ -2,10 +2,9 @@ import csv
 import copy
 import sys
 sys.path.append('../')
-import reveal_globals
 
 
-def initialization():
+def initialization(reveal_globals):
 	print("inside -- initialization.initialization")
 	#check for support files
 	try:
@@ -17,7 +16,7 @@ def initialization():
 	except IOError as error:
 		reveal_globals.error='Unmasque Error: \n Support File Not Accessible. \n Postgres Error: \n ' + dict(error.args[0])['M']
 		print('Support File Not Accessible. Error: ' + str(error))
-		return False
+		return [False]
 	#GET PK_DICT and index_dict
 	all_pkfk = []
 	# with open(reveal_globals.global_support_files_path + 'pkfkrelations.csv', 'rt') as f:
@@ -79,4 +78,4 @@ def initialization():
 				reveal_globals.global_index_dict[elt].append(str(row.split()[4]))
 	f1.close()
 	f2.close()
-	return True
+	return reveal_globals
