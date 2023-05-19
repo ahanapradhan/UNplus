@@ -23,7 +23,7 @@ def establishConnection(reveal_globals):
 
 def execute_sql(sqls):
     cur = reveal_globals.global_conn.cursor()
-    print(cur)
+    #print(cur)
     for sql in sqls:
         cur.execute(sql)
     cur.close()

@@ -81,7 +81,7 @@ def runreveal(reveal_globals):
 def reveal_support_init(reveal_globals):
     print("inside------reveal_support.init")
     # INITIALIZE ALL CONCERNED GLOBAL/LOCAL VARIABLES
-    reveal_globals.query1 = input_q.getQuery("bothActiveDormant")
+    reveal_globals.query1 = input_q.getQuery("full")
     reveal_globals.output1 = ""
 
     reveal_globals.select_inp = ""
@@ -465,7 +465,7 @@ def func_agg_start(reveal_globals):
     print("inside:   reveal_proc_support.func_agg_start")
     reveal_globals.local_start_time = time.time()
     reveal_globals.global_aggregated_attributes = aggregation.get_aggregation()
-    reveal_globals = refine_Query()
+    reveal_globals = refine_Query(reveal_globals)
     return reveal_globals
 
 
@@ -582,7 +582,7 @@ def func_project_start(reveal_globals):
 def func_filters_print(reveal_globals):
     print("global aoa")
     print(reveal_globals.global_filter_aoa)
-    print("global aoq")
+    print("global aeq")
     print(reveal_globals.global_filter_aeq)
 
 
@@ -625,7 +625,7 @@ def func_aoa_start(reveal_globals):
         else:
             predicate = elt[1] + ' ' + str(elt[2]) + ' ' + str(elt[4])
 
-        update_where_op_with_predicate(predicate, reveal_globals)
+        reveal_globals = update_where_op_with_predicate(predicate, reveal_globals)
     return reveal_globals
 
 
@@ -634,7 +634,6 @@ def in_extractor_start(reveal_globals):
 
     temp = reveal_globals.global_filter_predicates
     temp_2 = copy.deepcopy(temp)
-    new_temp = []
     for ele in reveal_globals.global_filter_aeq:
         new_temp = []
         for e2 in temp:
@@ -680,7 +679,7 @@ def in_extractor_complete(reveal_globals):
             else:
                 predicate = elt[1] + ' ' + str(elt[2]) + ' ' + str(elt[4])
 
-            update_where_op_with_predicate(predicate, reveal_globals)
+            reveal_globals = update_where_op_with_predicate(predicate, reveal_globals)
 
         else:
             flg = True
@@ -702,7 +701,7 @@ def in_extractor_complete(reveal_globals):
                 flg = False
             predicate += ')'
             if predicate != "()":
-                update_where_op_with_predicate(predicate, reveal_globals)
+                reveal_globals = update_where_op_with_predicate(predicate, reveal_globals)
     # in_operator.sneha_or()
     print(reveal_globals.global_where_op)
     reveal_globals.local_end_time = time.time()
