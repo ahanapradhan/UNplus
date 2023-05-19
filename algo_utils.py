@@ -1,55 +1,47 @@
 import datetime
 import math
-import numbers
 
-from UNplus import reveal_globals, executable
+from UNplus import executable
 from UNplus.dbcon import execute_sql, execute_sql_fetchone
 from UNplus import constants
 
 
-def bin_search_update1(att, i, toAtt, val):
-    att_info = (toAtt[att][0], toAtt[att][1])
-    if 'int' in reveal_globals.global_attrib_types_dict[att_info]:
-        left = get_val_plus_delta('int', constants.min_int_val, i)
-    elif 'numeric' in reveal_globals.global_attrib_types_dict[att_info]:
-        left = get_val_plus_delta('numeric', constants.min_int_val, i)
-    elif 'date' in reveal_globals.global_attrib_types_dict[att_info]:
-        left = get_val_plus_delta('date', constants.min_date_val, i)
-    right = val
+def bin_search(att_info, i, reveal_globals, val, is_ceil=True):
+    datatype = get_datatype(att_info[0], att_info[1], reveal_globals)
     execute_sql_fn = lambda mid: execute_sql([f"Update {att_info[0]} set {att_info[1]} = '{mid}';"])
-    binary_search(left, right, execute_sql_fn)
+
+    if is_ceil:
+        boundary = get_max_val(att_info[0], att_info[1], reveal_globals.global_attrib_types_dict)
+        left = val
+        right = get_val_plus_delta(datatype, boundary, -i)
+    else:
+        boundary = get_min_val(att_info[0], att_info[1], reveal_globals.global_attrib_types_dict)
+        left = get_val_plus_delta(datatype, boundary, i)
+        right = val
+
+    left, right = binary_search_algo(datatype, execute_sql_fn, left, right, is_ceil)
     return left, right
 
 
-def binary_search(left, right, execute_sql_fn):
-    if isinstance(left, numbers.Number):
-        binary_search_for_number(left, right, execute_sql_fn)
-    elif isinstance(left, datetime.date):
-        binary_search_for_date(left, right, execute_sql_fn)
-
-
-def binary_search_for_number(left, right, execute_sql_fn):
-    while int(right - left) > 0:
-        mid = left + int(math.floor((right - left) / 2))
+def binary_search_algo(datatype, execute_sql_fn, left, right, is_ceil=True):
+    while is_left_less_than_right(datatype, left, right):
+        mid = get_mid_val_by_ceil(datatype, left, right) if is_ceil \
+            else get_mid_val_by_floor(datatype, left, right)
         execute_sql_fn(mid)
         new_res = executable.getExecOutput()
         if len(new_res) < 2:
-            left = mid + 1
+            if is_ceil:
+                right = get_val_plus_delta(datatype, mid, -1)
+            else:
+                left = get_val_plus_delta(datatype, mid, 1)
         else:
-            right = mid
-    execute_sql_fn(right)
+            if is_ceil:
+                left = mid
+            else:
+                right = mid
 
-
-def binary_search_for_date(left, right, execute_sql_fn):
-    while int((right - left).days) > 0:
-        mid = left + datetime.timedelta(days=int(math.floor((right - left).days / 2)))
-        execute_sql_fn(mid)
-        new_res = executable.getExecOutput()
-        if len(new_res) < 2:
-            left = mid + datetime.timedelta(days=1)
-        else:
-            right = mid
-    execute_sql_fn(right)
+    execute_sql_fn(left) if is_ceil else execute_sql_fn(right)
+    return left, right
 
 
 def get_val_plus_delta(datatype, min_val, delta):
@@ -74,11 +66,19 @@ def get_min_val(tab, col, dict):
         return constants.min_date_val
 
 
-def get_mid_val(datatype, left, right):
+def get_mid_val_by_ceil(datatype, left, right):
     if datatype == 'int':
         delta = int(math.ceil((right - left) / 2))
     elif datatype == 'date':
         delta = int(math.ceil((right - left).days / 2))
+    return get_val_plus_delta(datatype, left, delta)
+
+
+def get_mid_val_by_floor(datatype, left, right):
+    if datatype == 'int':
+        delta = int(math.floor((right - left) / 2))
+    elif datatype == 'date':
+        delta = int(math.floor((right - left).days / 2))
     return get_val_plus_delta(datatype, left, delta)
 
 
@@ -150,23 +150,6 @@ def get_datatype(tab, col, reveal_globals):
         datatype = 'int'
     elif 'date' in reveal_globals.global_attrib_types_dict[(tab, col)]:
         datatype = 'date'
+    elif 'numeric' in reveal_globals.global_attrib_types_dict[(tab, col)]:
+        datatype = 'numeric'
     return datatype
-
-
-def bin_search_2(att, i, reveal_globals, toAtt, val):
-    left = val
-    datatype = get_datatype(toAtt[att][0], toAtt[att][1], reveal_globals)
-    max_boundary = get_max_val(toAtt[att][0], toAtt[att][1], reveal_globals.global_attrib_types_dict)
-    right = get_val_plus_delta(datatype, max_boundary, -i)
-
-    while is_left_less_than_right(datatype, left, right):  # left < right:
-        mid = get_mid_val(datatype, left, right)
-        execute_sql(["update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(mid) + "' ;"])
-        new_res = executable.getExecOutput()
-        if len(new_res) < 2:
-            right = get_val_plus_delta(datatype, mid, -1)
-        else:
-            left = mid
-
-    execute_sql(["update " + toAtt[att][0] + " set " + toAtt[att][1] + " = '" + str(left) + "' ;"])
-    return left

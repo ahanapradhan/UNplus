@@ -59,7 +59,16 @@ def mid_cal_for_date():
 
 #print(p)
 
+def call_by_ref(la):
+    la.append('a')
+    print(la)
+
 t = get_tuple_from_predicate("lineitem >= '1995-12-01'")
 #print(t)
 #check_timedelta()
-mid_cal_for_date()
+#mid_cal_for_date()
+lb = ['b', 'c']
+call_by_ref(lb)
+print(lb)
+call_by_ref(lb)
+print(lb)
